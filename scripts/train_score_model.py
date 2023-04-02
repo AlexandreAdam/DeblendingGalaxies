@@ -51,16 +51,16 @@ def main(args):
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     ema = ExponentialMovingAverage(model.parameters(), decay=args.ema_decay)
    
-	def loss_fn(x):
-		B, *D = x.shape
-		broadcast = [B, *[1] * len(D)]
-		mu = torch.randn_like(x)
-		t = torch.rand(B).to(DEVICE) * model.sde.T
-		mean, sigma = model.sde.marginal_prob(x, t)
-		sigma_ = sigma.view(*broadcast)
-		return torch.sum((mu + model(mean + sigma_ * mu, t)) ** 2) / B
+    def loss_fn(x):
+        B, *D = x.shape
+        broadcast = [B, *[1] * len(D)]
+        mu = torch.randn_like(x)
+        t = torch.rand(B).to(DEVICE) * model.sde.T
+        mean, sigma = model.sde.marginal_prob(x, t)
+        sigma_ = sigma.view(*broadcast)
+        return torch.sum((mu + model(mean + sigma_ * mu, t)) ** 2) / B
 
-	dataset = Dataset(args.dataset_path, args.dataset_key, args.dataset_channels, device=DEVICE)
+    dataset = Dataset(args.dataset_path, args.dataset_key, args.dataset_channels, device=DEVICE)
     dataset = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
 
     # ==== Take care of where to write logs and stuff =================================================================
