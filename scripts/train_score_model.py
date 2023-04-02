@@ -14,14 +14,14 @@ import re
 from torch_ema import ExponentialMovingAverage
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+LOG10 = np.log(10.)
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, path_to_h5, key, channels, device=DEVICE):
         self.filepath = path_to_h5
         self.device = device
         self.key = key
-		self.channels = channels
+        self.channels = channels
         with h5py.File(self.filepath, "r") as hf:
             self.size = hf[self.key].shape[0]
 
@@ -30,9 +30,34 @@ class Dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         with h5py.File(self.filepath, "r") as hf:
-			im = torch.tensor(hf[self.key][index, :, :, self.channels], dtype=DTYPE).to(self.device)
-			# put channels first for Conv2D score model
+            im = torch.tensor(hf[self.key][index, :, :, self.channels], dtype=DTYPE).to(self.device)
+            # put channels first for Conv2D score model
             return torch.permute(im, (2, 0, 1))
+
+# The following conversion are wrt to the 3631 Jy zero point
+def ab_mag_to_jansky(img): 
+    return 10**(-(img - 8.9) / 2.5)
+
+def preprocessing(img, dynamic_range=1e4, factor=1e4):
+    """
+    We want the diffusion to happen in log space so that generated images 
+    strictly have positive flux
+
+    We use log10(factor * Jy) units instead of AB mag. 
+
+    dynamic_range: Sets the decimal value, in Jy, up to which we hope to model the surface 
+        brightness. This preprocessing destroys the information below the dynamic range, 
+        or too faint by our criteria.
+    factor: Since most galaxies have AB mag around 18 in ther center, 
+        we multiply the pixel values by 10^4, which shift the average value to 
+        approximately 1 (or, equivalently, 
+		shifting AB mag by 10, to the zero point, which is 8.9). 
+    
+    In the end, most pixel values should roughly fall in the range 
+    [log10(dynamic_range), 0].
+    """
+    img = ab_mag_to_jansky(img)
+    return torch.log(factor * dynamic_range * img + 1/dynamic_range) / LOG10
 
 
 def main(args):
@@ -48,6 +73,8 @@ def main(args):
         model = torch.nn.DataParallel(NCSNpp(**hyperparameters).to(DEVICE), device_ids=list(range(torch.cuda.device_count())))
     else:
         raise ValueError
+	hyperparameters["dynamic_range"] = args.dynamic_range
+	hyperparameters["factor"] = args.factor
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     ema = ExponentialMovingAverage(model.parameters(), decay=args.ema_decay)
    
@@ -128,7 +155,6 @@ def main(args):
         for batch, x in enumerate(dataset):
             start = time.time()
             # preprocessing
-            x = data_augmentation(x)
             x = preprocessing(x)
             # optimize network
             optimizer.zero_grad()
@@ -213,6 +239,8 @@ if __name__ == '__main__':
     parser.add_argument("--dataset_channels",   nargs="+", required=True, dtype=int, help="Channels of the dataset to use. ")
     parser.add_argument("--model_id",           default="none",                     help="The script will search in provided model_dir argument for model_id and load checkpoint if it exists.")
     parser.add_argument("--model_checkpoint",   default=None,       type=int,       help="Index of the checkpoint to load.")
+	parser.add_argument("--dynamic_range",		default=1e4,		type=float)
+	parser.add_argument("--factor",				default=1e4,		type=float,		help="Multiply Janskys by this factor to get pixel values closer to 1 (in the center)")
 
     # Model parameters
     parser.add_argument("--model_parameters",               required=True,                  help="Path to model parameter json file.")

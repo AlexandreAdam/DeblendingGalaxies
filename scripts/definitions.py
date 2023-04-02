@@ -10,11 +10,10 @@ def ab_mag_to_jansky(img):
 def ab_mag_to_cgs(img):
     return 10**(-(img + 48.6) / 2.5)
 
-
-def preprocessing(img, dynamic_range=1e8, factor=10**(3.6)):
+def preprocessing(img, dynamic_range=1e4, factor=1e4):
     """
     We want the diffusion to happen in log space so that generated images 
-    strictly whave positive flux
+    strictly have positive flux
 
     We use log10(factor * Jy) units instead of AB mag. 
 
@@ -22,8 +21,8 @@ def preprocessing(img, dynamic_range=1e8, factor=10**(3.6)):
         brightness. This preprocessing destroys the information below the dynamic range, 
         or too faint by our criteria.
     factor: Since most galaxies have AB mag around 18 in ther center, 
-        we multiply the pixel values by 10^(3.6), which shift the average value to 
-        approximately 1 (or, equivalently, shifting AB mag by 9.1). 
+        we multiply the pixel values by 10^4, which shift the average value to 
+        approximately 1 (or, equivalently, shifting AB mag by 10). 
     
     In the end, most pixel values should fall in the rough range 
     [log10(dynamic_range), 0].
@@ -31,8 +30,9 @@ def preprocessing(img, dynamic_range=1e8, factor=10**(3.6)):
     img = ab_mag_to_jansky(img)
     return torch.log(factor * dynamic_range * img + 1/dynamic_range) / LOG10
 
-def inverse_proprocessing(img, dynamic_range=1e8, factor=10**(3.6)):
+def inverse_proprocessing(img, dynamic_range=1e4, factor=1e4):
     """
-    take a generated or processed image and return it in Jy
+    take a generated or processed image and return it in Jy. Note that 
+    this is not a strict inverse. Only the signal in our dynamic range is recovered. 
     """
     return 10**(img - np.log10(dynamic_range) - np.log10(factor))
