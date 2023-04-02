@@ -11,10 +11,13 @@ import torch
 import os
 from glob import glob
 import re
+import h5py
 from torch_ema import ExponentialMovingAverage
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 LOG10 = np.log(10.)
+DTYPE = torch.float32
+
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, path_to_h5, key, channels, device=DEVICE):
@@ -57,7 +60,7 @@ def preprocessing(img, dynamic_range=1e4, factor=1e4):
     [log10(dynamic_range), 0].
     """
     img = ab_mag_to_jansky(img)
-    return torch.log(factor * dynamic_range * img + 1/dynamic_range) / LOG10
+    return torch.log(factor * img + 1/dynamic_range) / LOG10
 
 
 def main(args):
@@ -73,8 +76,9 @@ def main(args):
         model = torch.nn.DataParallel(NCSNpp(**hyperparameters).to(DEVICE), device_ids=list(range(torch.cuda.device_count())))
     else:
         raise ValueError
-	hyperparameters["dynamic_range"] = args.dynamic_range
-	hyperparameters["factor"] = args.factor
+
+    hyperparameters["dynamic_range"] = args.dynamic_range
+    hyperparameters["factor"] = args.factor
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     ema = ExponentialMovingAverage(model.parameters(), decay=args.ema_decay)
    
@@ -239,8 +243,8 @@ if __name__ == '__main__':
     parser.add_argument("--dataset_channels",   nargs="+", required=True, dtype=int, help="Channels of the dataset to use. ")
     parser.add_argument("--model_id",           default="none",                     help="The script will search in provided model_dir argument for model_id and load checkpoint if it exists.")
     parser.add_argument("--model_checkpoint",   default=None,       type=int,       help="Index of the checkpoint to load.")
-	parser.add_argument("--dynamic_range",		default=1e4,		type=float)
-	parser.add_argument("--factor",				default=1e4,		type=float,		help="Multiply Janskys by this factor to get pixel values closer to 1 (in the center)")
+    parser.add_argument("--dynamic_range",		default=1e4,		type=float)
+    parser.add_argument("--factor",				default=1e4,		type=float,		help="Multiply Janskys by this factor to get pixel values closer to 1 (in the center)")
 
     # Model parameters
     parser.add_argument("--model_parameters",               required=True,                  help="Path to model parameter json file.")

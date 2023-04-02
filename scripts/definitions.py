@@ -28,11 +28,11 @@ def preprocessing(img, dynamic_range=1e4, factor=1e4):
     [log10(dynamic_range), 0].
     """
     img = ab_mag_to_jansky(img)
-    return torch.log(factor * dynamic_range * img + 1/dynamic_range) / LOG10
+    return torch.log(factor * img + 1/dynamic_range) / LOG10
 
 def inverse_proprocessing(img, dynamic_range=1e4, factor=1e4):
     """
     take a generated or processed image and return it in Jy. Note that 
     this is not a strict inverse. Only the signal in our dynamic range is recovered. 
     """
-    return 10**(img - np.log10(dynamic_range) - np.log10(factor))
+    return 10**(img - np.log10(factor))
