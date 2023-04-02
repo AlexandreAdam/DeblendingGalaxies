@@ -8,7 +8,7 @@
 #SBATCH --job-name=Train_SKIRT512_i
 #SBATCH --output=%x-%j.out
 source $HOME/environments/scope/bin/activate
-python $DEBLENDER/scripts/train_ddpm_or_ncsnpp.py\
+python $DEBLENDER/scripts/train_score_model.py\
   --model_architecture=ncsnpp\
   --dataset_path=/home/aadam/scratch/skirt512_grizy.h5\
   --dataset_channels 2\
