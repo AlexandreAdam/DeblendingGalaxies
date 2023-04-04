@@ -239,7 +239,7 @@ if __name__ == '__main__':
     parser.add_argument("--model_architecture",     required=True,                  help="Either 'ddpm' or 'ncsnpp'")
     parser.add_argument("--dataset_path",       required=True)
     parser.add_argument("--dataset_key",        required=True)
-    parser.add_argument("--dataset_channels",   nargs="+", required=True, dtype=int, help="Channels of the dataset to use. ")
+    parser.add_argument("--dataset_channels",   nargs="+", required=True, type=int, help="Channels of the dataset to use. ")
     parser.add_argument("--model_id",           default="none",                     help="The script will search in provided model_dir argument for model_id and load checkpoint if it exists.")
     parser.add_argument("--model_checkpoint",   default=None,       type=int,       help="Index of the checkpoint to load.")
     parser.add_argument("--dynamic_range",		default=1e4,		type=float)
