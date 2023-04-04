@@ -1,4 +1,4 @@
-from torch_score_models import DDPM, NCSNpp
+from score_models import DDPM, NCSNpp
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms as T
