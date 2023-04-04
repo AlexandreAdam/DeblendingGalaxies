@@ -16,7 +16,6 @@ from torch_ema import ExponentialMovingAverage
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 LOG10 = np.log(10.)
-DTYPE = torch.float32
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -33,7 +32,7 @@ class Dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         with h5py.File(self.filepath, "r") as hf:
-            im = torch.tensor(hf[self.key][index, :, :, self.channels], dtype=DTYPE).to(self.device)
+            im = torch.tensor(hf[self.key][index, :, :, self.channels]).to(self.device)
             # put channels first for Conv2D score model
             return torch.permute(im, (2, 0, 1))
 
