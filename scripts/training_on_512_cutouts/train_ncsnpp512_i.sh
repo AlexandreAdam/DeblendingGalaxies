@@ -13,7 +13,7 @@ python $DEBLENDER/scripts/train_score_model.py\
   --dataset_path=/home/aadam/scratch/skirt512_grizy.h5\
   --dataset_channels 2\
   --dataset_key=images\
-  --model_parameters=$DEBLENDER/scripts/configs/ncsnpp_skirt512_single_channel.json\
+  --model_parameters=$DEBLENDER/scripts/training_on_512_cutouts/ncsnpp_skirt512_single_channel.json\
   --epochs=10000\
   --learning_rate=2e-5\
   --max_time=70\
