@@ -85,8 +85,8 @@ def main(args):
         B, *D = x.shape
         broadcast = [B, *[1] * len(D)]
         mu = torch.randn_like(x)
-        t = torch.rand(B).to(DEVICE) * model.sde.T
-        mean, sigma = model.sde.marginal_prob(x, t)
+        t = torch.rand(B).to(DEVICE) * model.module.sde.T
+        mean, sigma = model.module.sde.marginal_prob(x, t)
         sigma_ = sigma.view(*broadcast)
         return torch.sum((mu + model(mean + sigma_ * mu, t)) ** 2) / B
 
