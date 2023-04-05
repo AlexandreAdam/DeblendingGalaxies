@@ -182,6 +182,9 @@ def main(args):
                         loss = loss_fn(x)
                         writer.add_scalar("EMA MSE", float(loss), step)
             step += 1
+            if args.epoch_iterations is not None:
+                if batch >= args.epoch_iterations:
+                    break
 
         time_per_step_epoch_mean /= len(dataset)
         cost /= len(dataset)
@@ -250,6 +253,7 @@ if __name__ == '__main__':
 
     # Optimization params
     parser.add_argument("--epochs",                         default=10,     type=int,       help="Number of epochs for training.")
+    parser.add_argument("--epoch_iterations",               default=None,   type=int,       help="Number of iterations to do in an epoch")
     parser.add_argument("--learning_rate",                  default=2e-5,   type=float,     help="Initial learning rate.")
     parser.add_argument("--patience",                       default=np.inf, type=int,       help="Number of step at which training is stopped if no improvement is recorder.")
     parser.add_argument("--tolerance",                      default=0,      type=float,     help="Current score <= (1 - tolerance) * best score => reset patience, else reduce patience.")
