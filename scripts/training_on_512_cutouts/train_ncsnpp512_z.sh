@@ -23,5 +23,5 @@ python $DEBLENDER/scripts/train_score_model.py\
   --model_dir=$DEBLENDER/models/\
   --checkpoints=10\
   --seed=42\
-  --dynamic_range=1e6
-
+  --dynamic_range=1e6\
+  --epoch_iterations=1000
