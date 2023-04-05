@@ -17,10 +17,11 @@ python $DEBLENDER/scripts/train_score_model.py\
   --epochs=10000\
   --learning_rate=2e-5\
   --max_time=70\
-  --batch_size=16\
+  --batch_size=4\
   --logdir=$DEBLENDER/logs/\
   --logname_prefixe=ncsnpp_skirt_y\
   --model_dir=$DEBLENDER/models/\
   --checkpoints=10\
-  --seed=42
+  --seed=42\
+  --dynamic_range=1e6
 
