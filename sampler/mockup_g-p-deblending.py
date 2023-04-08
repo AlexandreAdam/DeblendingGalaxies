@@ -15,22 +15,15 @@ my_img = example_image_gpdeblending # or user could provide image with np.load("
 
 class deblend(Sampler):
 
-    def __init__(self, image, psf, variance = 1., **kwargs):
-        super().__init__(**kwargs)
-        
-        self.image = image
-        self.psf = psf
-        self.variance = variance
-
-    def log_likelihood(self, x):
-        blend = x[0] + self.psf * (10**x[1]) # this just rescales the PSF, could use AutoProf to easily make variable position
-        return torch.sum((self.image - blend)**2 / self.variance)
+    def log_likelihood(self, x, image, variance, psf):
+        blend = x[0] + psf * (10**x[1]) # this just rescales the PSF, could use AutoProf to easily make variable position
+        return torch.sum((image - blend)**2 / variance)
 
 P = joint_prior(GP, flat_prior(low = -5, high = 5))
-D = deblend(prior = P, image = my_img, psf = hsc_psf)
+D = deblend(prior = P)
 
 for _ in range(10):
-    samp = D.sample_posterior()
+    samp = D.sample_posterior(my_img, torch.ones_like(my_img), hsc_psf)
 
     fig, axarr = plt.subplots(1,2, figsize = (10,5))
     axarr[0].imshow(my_img, origin = "lower")

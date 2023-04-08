@@ -14,25 +14,19 @@ from data import example_image_ggdeblending
 GP1 = galaxy_prior(size = (512,512))
 GP2 = galaxy_prior(size = (512,512))
 
-my_img = example_image_ggdeblending # or user could load their own with np.load("image.npy")
-
 class deblend(Sampler):
 
-    def __init__(self, image, variance = 1., **kwargs):
-        super().__init__(**kwargs)
-        
-        self.image = image
-        self.variance = variance
-
-    def log_likelihood(self, x):
+    def log_likelihood(self, x, image, variance):
         blend = x[0] + x[1] # in this case there are two objects, so x is a tuple with the information for both, for blending we just add them
-        return torch.sum((self.image - blend)**2 / self.variance)
+        return torch.sum((image - blend)**2 / variance)
+
+my_img = example_image_ggdeblending # or user could load their own with np.load("image.npy")
 
 P = joint_prior(GP1, GP2) # joint prior just holds all the priors and will return everything about them as tuples
-D = deblend(prior = P, image = my_img)
+D = deblend(prior = P)
 
 for _ in range(10):
-    samp = D.sample_posterior()
+    samp = D.sample_posterior(my_img, torch.ones_like(my_img))
 
     fig, axarr = plt.subplots(1,3, figsize = (10,5))
     axarr[0].imshow(my_img, origin = "lower")

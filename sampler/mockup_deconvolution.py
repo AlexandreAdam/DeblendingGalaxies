@@ -18,28 +18,22 @@ from sampler import Sampler
 # galaxy prior defined by diffusion model. Could also very easily throw in AutoProf gaussian model or sersic model to show the benefit of having a full prior in this case
 GP = galaxy_prior(size = (512,512))
 
-my_img = example_image_deconvolve # alternatively user could load their own image with np.load("image.npy")
 
 class deconv(Sampler):
 
-    def __init__(self, image, psf, variance = 1., **kwargs):
-        super().__init__(**kwargs)
-        
-        self.psf = psf
-        self.image = image
-        self.variance = variance
+    def log_likelihood(self, x, image, variance, psf):
 
-    def log_likelihood(self, x):
+        conv = convolve(x, psf)
 
-        conv = convolve(x, self.psf)
+        return torch.sum((image - conv)**2 / variance)
 
-        return torch.sum((self.image - conv)**2 / self.variance)
+my_img = example_image_deconvolve # alternatively user could load their own image with np.load("image.npy")
 
 # create the sampler object with a prior
-D = deconv(prior = GP, image = my_img, psf = hsc_psf)
+D = deconv(prior = GP)
 
 for _ in range(10):
-    samp = D.sample_posterior()
+    samp = D.sample_posterior(my_img, torch.ones_like(my_img), hsc_psf)
 
     fig, axarr = plt.subplots(1,2, figsize = (10,5))
     axarr[0].imshow(my_img, origin = "lower")
