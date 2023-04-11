@@ -37,29 +37,24 @@ class Dataset(torch.utils.data.Dataset):
             return torch.permute(im, (2, 0, 1))
 
 # The following conversion are wrt to the 3631 Jy zero point
-def ab_mag_to_jansky(img): 
+def ab_mag_to_jansky(img):
     return 10**(-(img - 8.9) / 2.5)
 
-def preprocessing(img, dynamic_range=1e4, factor=1e4):
+def preprocessing(img, dynamic_range=1e6):
     """
     We want the diffusion to happen in log space so that generated images 
     strictly have positive flux
 
-    We use log10(factor * Jy) units instead of AB mag. 
+    We use log10(microJy) units instead of AB mag.
 
     dynamic_range: Sets the decimal value, in Jy, up to which we hope to model the surface 
         brightness. This preprocessing destroys the information below the dynamic range, 
         or too faint by our criteria.
-    factor: Since most galaxies have AB mag around 18 in ther center, 
-        we multiply the pixel values by 10^4, which shift the average value to 
-        approximately 1 (or, equivalently, 
-		shifting AB mag by 10, to the zero point, which is 8.9). 
-    
     In the end, most pixel values should roughly fall in the range 
-    [log10(dynamic_range), 0].
+    [0, log10(dynamic_range)].
     """
     img = ab_mag_to_jansky(img)
-    return torch.log(factor * img + 1/dynamic_range) / LOG10
+    return torch.log(1e6 * img + 1/dynamic_range) / np.log(10.) + np.log10(dynamic_range)
 
 
 def main(args):
@@ -158,7 +153,7 @@ def main(args):
         for batch, x in enumerate(dataset):
             start = time.time()
             # preprocessing
-            x = preprocessing(x)
+            x = preprocessing(x, dynamic_range=args.dynamic_range)
             # optimize network
             optimizer.zero_grad()
             loss = loss_fn(x)
