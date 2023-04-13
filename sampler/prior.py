@@ -12,6 +12,7 @@ from typing import Tuple
 
 import torch
 
+__all__ = ["Prior", "FlatPrior", "JointPrior"]
 
 class Prior(ABC):
     """
