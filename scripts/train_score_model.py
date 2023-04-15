@@ -113,16 +113,19 @@ def main(args):
                 json.dump(hyperparameters, f, indent=4)
         save_checkpoint = True
         # ======= Load model if model_id is provided ===============================================================
-        paths = glob(os.path.join(checkpoints_dir, "*.pt"))
+        paths = glob(os.path.join(checkpoints_dir, "checkpoint*.pt"))
+        opt_paths = glob(os.path.join(checkpoints_dir, "optimizer*.pt"))
         checkpoints = [int(re.findall('[0-9]+', os.path.split(path)[-1])[-1]) for path in paths]
         scores = [float(re.findall('([0-9]{1}.[0-9]+e[+-][0-9]{2})', os.path.split(path)[-1])[-1]) for path in paths]
         if args.model_id.lower() != "none" and checkpoints != []:
             if args.model_checkpoint is not None:
                 model.module.load_state_dict(torch.load(paths[checkpoints == args.model_checkpoint], map_location=DEVICE))
+                optimizer.load_state_dict(torch.load(opt_paths[checkpoints == args.model_checkpoint], map_location=DEVICE))
                 print(f"Loaded checkpoint {args.model_checkpoint} of {args.model_id}")
                 lastest_checkpoint = args.model_checkpoint
             else:
                 model.module.load_state_dict(torch.load(paths[np.argmax(checkpoints)], map_location=DEVICE))
+                optimizer.load_state_dict(torch.load(opt_paths[np.argmax(checkpoints)], map_location=DEVICE))
                 print(f"Loaded checkpoint {max(checkpoints)} of {args.model_id}")
                 lastest_checkpoint = max(checkpoints)
         else:
@@ -211,6 +214,7 @@ def main(args):
                 with ema.average_parameters():  # save EMA parameters
                     # Use model.module to get the state dict from within the data parallel module
                     torch.save(model.module.state_dict(), os.path.join(checkpoints_dir, f"checkpoint_{cost:.4e}_{lastest_checkpoint:03d}.pt"))
+                torch.save(optimizer.state_dict(), os.path.join(checkpoints_dir, f"optimizer_{cost:.4e}_{lastest_checkpoint:03d}.pt"))
                 checkpoints.append(lastest_checkpoint)
                 scores.append(cost)
                 print("Saved checkpoint for step {}".format(step))
@@ -218,6 +222,7 @@ def main(args):
                 # remove the worst score checkpoint (excluding the one we just saved)
                 index_to_delete = np.argmax(scores[:-1])
                 os.remove(os.path.join(checkpoints_dir, f"checkpoint_{scores[index_to_delete]:.4e}_{checkpoints[index_to_delete]:03d}.pt"))
+                os.remove(os.path.join(checkpoints_dir, f"optimizer_{scores[index_to_delete]:.4e}_{checkpoints[index_to_delete]:03d}.pt"))
                 del scores[index_to_delete]
                 del checkpoints[index_to_delete]
         if patience == 0:
