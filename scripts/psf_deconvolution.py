@@ -123,7 +123,7 @@ def main(args):
     # TODO support multiple channels
     # Todo possibly convert pixel size from pc in Connor B. fits file to arcsec using a user specified Hubble constant and redshift
     with fits.open(args.psf_fits) as data:
-        psf = data[args.fits_key].data[None] # add the channel dimension, a single channel for now.
+        psf = data[args.psf_key].data[None] # add the channel dimension, a single channel for now.
 
     forward_model = make_forward_model(args, psf)
 
@@ -211,6 +211,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("--experiment_name",    default="",                         help="Name of the output files")
     parser.add_argument("--psf_fits",           required=True,                       help="Path to PSF fits file")
+    parser.add_argument("--psf_key",            required=True,                       help="Key to the PSF in the fits file")
 
     # REAL DATA MODEL TODO write the code for this mode
     # With real data, we only have access to the observation itself and the PSF

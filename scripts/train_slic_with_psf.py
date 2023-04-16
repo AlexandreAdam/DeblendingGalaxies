@@ -92,7 +92,9 @@ def main(args):
     # Todo possibly convert pixel size from pc in Connor B. fits file to arcsec using a user specified Hubble constant and redshift
     # TODO, would it make sense to sample different PSF and condition the SLIC model on it?????
     with fits.open(args.psf_fits) as data:
-        psf = data[args.fits_key].data[None] # add the channel dimension, a single channel for now.
+        psf = data[args.psf_key].data[None] # add the channel dimension, a single channel for now.
+    hyperparameters["psf_file"] = args.psf_fits
+    hyperparameters["psf_key"] = args.psf_key
     forward_model = make_forward_model(args, psf)
 
     # Define the architecture of the SLIC model
@@ -259,7 +261,7 @@ if __name__ == '__main__':
     parser.add_argument("--model_id",           default="none",                     help="The script will search in provided model_dir argument for model_id and load checkpoint if it exists.")
     parser.add_argument("--model_checkpoint",   default=None, type=int,             help="Index of the checkpoint to load.")
     parser.add_argument("--psf_fits",           required=True,                      help="Path to PSF fits file")
-
+    parser.add_argument("--psf_key",            required=True,                      help="Key to the PSF in the fits file")
 
     parser.add_argument("--prior_model",        required=True,                      help="Path to prior model, we mainly need it's sigma_min and sigma_max. The name"
                                                                                          "of the prior model is encoded in the the SLIC model params for future reference, as well "
