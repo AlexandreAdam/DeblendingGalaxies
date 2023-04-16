@@ -79,7 +79,6 @@ def make_forward_model(args, psf):
         x = F.avg_pool2d(x, kernel_size=2, stride=2)
         return x
     return A
-#
 
 
 def main(args):
@@ -142,6 +141,7 @@ def main(args):
     if args.diagonal_gaussian_likelihood:
         def convolved_likelihood(x, t, sigma_n=args.noise_rms):
             var = (sigma_n**2 + sigma(t)**2).view(*[1]*len(observation.shape))
+            # TODO include invert_preprocessing here to make sure gradient picks it up
             y_hat = forward_model(x[None])
             ll = torch.sum(-0.5 * torch.square(observation - y_hat) / var)
             return ll
@@ -185,6 +185,7 @@ def main(args):
         # TODO support multiple channels
         hf.create_dataset("model", [args.W, 1, args.model_pixels, args.model_pixels], dtype=np.float32)
         hf["model"].attrs["posterior_sample"] = not args.from_prior # make sure we write somewhere if this is a posterior sample or not
+        # TODO renormalize noise to make sure 10^x does not explode, add corresponding drift from Ito's lemma in the SDE
         for n in range(args.W // args.B):
             with torch.no_grad(): # important to add this context, otherwise Pytorch construct a graph through the sampling procedure.
                 # TODO add the possibly of conditioning on a user defined guess, and a user specified "high temperature regime"

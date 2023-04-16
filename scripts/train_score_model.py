@@ -2,8 +2,8 @@ from score_models import DDPM, NCSNpp
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms as T
-from datetime import datetime
 from definitions import preprocessing
+from datetime import datetime
 from tqdm import tqdm
 import time
 import json
@@ -36,26 +36,6 @@ class Dataset(torch.utils.data.Dataset):
             im = torch.tensor(hf[self.key][index, :, :, self.channels]).to(self.device)
             # put channels first for Conv2D score model
             return torch.permute(im, (2, 0, 1))
-
-# The following conversion are wrt to the 3631 Jy zero point
-def ab_mag_to_jansky(img):
-    return 10**(-(img - 8.9) / 2.5)
-
-def preprocessing(img, dynamic_range=1e6):
-    """
-    We want the diffusion to happen in log space so that generated images 
-    strictly have positive fluxHSC_SSP/pdr3_wide
-
-    We use log10(microJy) units instead of AB mag.
-
-    dynamic_range: Sets the decimal value, in Jy, up to which we hope to model the surface 
-        brightness. This preprocessing destroys the information below the dynamic range, 
-        or too faint by our criteria.
-    In the end, most pixel values should roughly fall in the range 
-    [0, log10(dynamic_range)].
-    """
-    img = ab_mag_to_jansky(img)
-    return torch.log(1e6 * img + 1/dynamic_range) / np.log(10.) + np.log10(dynamic_range)
 
 
 def main(args):
@@ -246,8 +226,7 @@ if __name__ == '__main__':
     parser.add_argument("--dataset_channels",   nargs="+", required=True, type=int, help="Channels of the dataset to use. ")
     parser.add_argument("--model_id",           default="none",                     help="The script will search in provided model_dir argument for model_id and load checkpoint if it exists.")
     parser.add_argument("--model_checkpoint",   default=None,       type=int,       help="Index of the checkpoint to load.")
-    parser.add_argument("--dynamic_range",		default=1e4,		type=float)
-    parser.add_argument("--factor",				default=1e4,		type=float,		help="Multiply Janskys by this factor to get pixel values closer to 1 (in the center)")
+    parser.add_argument("--dynamic_range",		default=1e5,		type=float)
 
     # Model parameters
     parser.add_argument("--model_parameters",               required=True,                  help="Path to model parameter json file.")
@@ -268,7 +247,7 @@ if __name__ == '__main__':
 
     # logs
     parser.add_argument("--logdir",             default="None",                     help="Path of logs directory. Default if None, no logs recorded.")
-    parser.add_argument("--logname",            default=None,                       help="OEerwrite name of the log with this argument")
+    parser.add_argument("--logname",            default=None,                       help="Overwrite name of the log with this argument")
     parser.add_argument("--logname_prefixe",    default="score_model",                  help="If name of the log is not provided, this prefix is prepended to the date")
     parser.add_argument("--model_dir",          default="None",                     help="Path to the directory where to save models checkpoints.")
     parser.add_argument("--checkpoints",        default=10, type=int,               help="Save a checkpoint of the models each {%} epoch.")
