@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms as T
 from datetime import datetime
+from definitions import preprocessing
 from tqdm import tqdm
 import time
 import json
