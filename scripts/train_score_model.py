@@ -43,7 +43,7 @@ def ab_mag_to_jansky(img):
 def preprocessing(img, dynamic_range=1e6):
     """
     We want the diffusion to happen in log space so that generated images 
-    strictly have positive flux
+    strictly have positive fluxHSC_SSP/pdr3_wide
 
     We use log10(microJy) units instead of AB mag.
 
