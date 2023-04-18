@@ -3,7 +3,7 @@
 #SBATCH --cpus-per-task=1 # maximum cpu per task is 3.5 per gpus
 #SBATCH --gres=gpu:1
 #SBATCH --mem=32G			 # memory per node
-#SBATCH --time=02-23:00		# time (DD-HH:MM)
+#SBATCH --time=00-01:00		# time (DD-HH:MM)
 #SBATCH --account=rrg-lplevass
 #SBATCH --job-name=Train_SLIC_hst_psf_deconvolution
 #SBATCH --output=%x-%j.out
