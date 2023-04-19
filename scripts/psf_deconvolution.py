@@ -1,5 +1,5 @@
 from score_models import NCSNpp
-from functorch import grad, vmap
+from functorch import grad, vmap, vjp
 from torch.nn import functional as F
 from definitions import interpolate, inverse_proprocessing
 import json
