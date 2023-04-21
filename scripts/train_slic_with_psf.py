@@ -92,7 +92,7 @@ def main(args):
     # Todo possibly convert pixel size from pc in Connor B. fits file to arcsec using a user specified Hubble constant and redshift
     # TODO, would it make sense to sample different PSF and condition the SLIC model on it?????
     with fits.open(args.psf_fits) as data:
-        psf = data[args.psf_key].data[None] # add the channel dimension, a single channel for now.
+        psf = data[args.psf_key].data.astype(np.float32)[None] # add the channel dimension, a single channel for now.
     hyperparameters["psf_file"] = args.psf_fits
     hyperparameters["psf_key"] = args.psf_key
     forward_model = make_forward_model(args, psf)
