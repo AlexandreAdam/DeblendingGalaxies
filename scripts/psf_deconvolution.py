@@ -72,7 +72,7 @@ def make_forward_model(args, psf):
     _min = - args.model_pixel_size * (args.model_pixels + args.zero_padding) / 2
     i_coord = (x - _min) / args.model_pixel_size
     j_coord = (y - _min) / args.model_pixel_size
-    coordinates = torch.stack([i_coord, j_coord], dim=0)
+    coordinates = torch.stack([i_coord, j_coord], dim=0).to(DEVICE)
     def A(x):
         x = F.pad(x, pad=[args.zero_padding]*4, mode="constant", value=0.)
         x = batched_interpolation(x, coordinates)
