@@ -43,7 +43,7 @@ def make_forward_model(args, psf):
         the likelihood function, thus this function is not the right place for it.
 
     Assumes psf is a 3D numpy array, with channels first. I assume PSF has the same number of channels as the observation.
-        TODO: support more than one channels in the script. Requires either a prior trained on all channels or separate priors for each
+        #TODO: support more than one channels in the script. Requires either a prior trained on all channels or separate priors for each
 
     args must have the following elements in its namespace:
         dynamic_range: The dynamic range of the prior, which specifies how we recover micro Jansky units. This parameter
@@ -61,7 +61,7 @@ def make_forward_model(args, psf):
     """
     C, H, W = psf.shape
     psf = torch.tensor(psf).to(DEVICE).view(C, 1, H, W) # reshape to a convolution kernel [channel_out, channels_in/groups, H, W]
-    batched_interpolation = vmap(interpolate, in_dims=({'image': 0, 'coordinates': None},))  # only batch over the images
+    batched_interpolation = vmap(interpolate, in_dims=(0, None))  # only batch over the images
 
     # TODO support a shift of the ccordinates
     # define target coordinates at the super sampling resolution of the psf
