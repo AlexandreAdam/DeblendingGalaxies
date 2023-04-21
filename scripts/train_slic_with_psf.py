@@ -112,19 +112,22 @@ def main(args):
 
     def loss_fn(x):
         """
-        Sliced score matching loss on the distribution implicitly defined by
+        Denoising or sliced score matching loss on the distribution implicitly defined by
         taking a noise sample from a telescope dark image (t=0)
         and adding noise (at temperature t) through a user specified forward model.
 
-        This model will be specialized to this specific forward model, and won't necessarily be a
-        good approximation in general.
+        This model will be specialized to this specific (linear) forward model, and won't necessarily be a
+        good approximation in general
         """
         B = x.shape[0]
-        z = torch.randn([B, 1, args.model_pixels, args.model_pixels]).to(DEVICE)  # sample in the model space
         t = torch.rand(B).to(DEVICE)
         _, sigma = model.module.sde.marginal_prob(None, t)
-        churned_x = x + forward_model(sigma.view(B, 1, 1, 1) * z)  # produce a noise realisation at temperature t
-        return sliced_score_matching_loss(score_fn=lambda x: model.score(x, t), samples=churned_x, noise_type=args.hutchinson_noise_type)
+        z = forward_model(torch.randn([B, 1, args.model_pixels, args.model_pixels]).to(DEVICE)) # noise propagated through forward model
+        perturbed_x = x + sigma.view(B, 1, 1, 1) * z
+        if args.loss.lower() == "ssm":
+            return sliced_score_matching_loss(score_fn=lambda x: model.score(x, t), samples=perturbed_x, noise_type=args.hutchinson_noise_type)
+        elif args.loss.lower() == "dsm":
+            return torch.sum((z + model(perturbed_x, t))**2) / B
 
     # ==== Take care of where to write logs and stuff =================================================================
     if args.model_id.lower() != "none":
@@ -262,6 +265,7 @@ if __name__ == '__main__':
     parser.add_argument("--model_checkpoint",   default=None, type=int,             help="Index of the checkpoint to load.")
     parser.add_argument("--psf_fits",           required=True,                      help="Path to PSF fits file")
     parser.add_argument("--psf_key",            required=True,                      help="Key to the PSF in the fits file")
+    parser.add_argument("--loss",               default="dsm",                      help="Either dsm for Denoising Score Matching or ssm for sliced score matching")
 
     parser.add_argument("--prior_model",        required=True,                      help="Path to prior model, we mainly need it's sigma_min and sigma_max. The name"
                                                                                          "of the prior model is encoded in the the SLIC model params for future reference, as well "
@@ -271,6 +275,7 @@ if __name__ == '__main__':
                                                                                          "to the pixel size of the noise dataset used (e.g. for HST this should be roughly 0.04 arcseconds.")
     parser.add_argument("--model_pixels",       required=True,     type=int,         help="Number of pixels on a side for the (prior) model ")
     parser.add_argument("--model_pixel_size",   required=True,  type=float,          help="Size of a pixel for the (prior) model, in arcseconds")
+    parser.add_argument("--super_sampling_factor", default=2,   type=int,           help="Factor by which the PSF is super sampled. ")
     parser.add_argument("--zero_padding",       default=0,      type=int,            help="Zero padding in the forward model. Default is no zero-padding")
 
     # Model parameters

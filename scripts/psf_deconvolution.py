@@ -63,10 +63,11 @@ def make_forward_model(args, psf):
     psf = torch.tensor(psf).to(DEVICE).view(C, 1, H, W) # reshape to a convolution kernel [channel_out, channels_in/groups, H, W]
     batched_interpolation = vmap(interpolate, in_dims=({'image': 0, 'coordinates': None},))  # only batch over the images
 
-    # define target coordinates at twice the number of pixels of the observed image
+    # TODO support a shift of the ccordinates
+    # define target coordinates at the super sampling resolution of the psf
     fov = args.observation_pixel_size * args.observation_pixels
-    x = torch.linspace(-1, 1, 2*args.observation_pixels).float() * fov / 2
-    x, y = torch.meshgrid(x, x, indexing="ij")
+    x = torch.linspace(-1, 1, args.super_sampling_factor*args.observation_pixels).float() * fov / 2
+    x, y = torch.meshgrid(x, x, indexing="ij")  # TODO make this coherent with WCS
     # Transform these coordinates into model pixel indices
     _min = - args.model_pixel_size * (args.model_pixels + args.zero_padding) / 2
     i_coord = (x - _min) / args.model_pixel_size
@@ -76,7 +77,7 @@ def make_forward_model(args, psf):
         x = F.pad(x, pad=[args.zero_padding]*4, mode="constant", value=0.)
         x = batched_interpolation(x, coordinates)
         x = F.conv2d(x, psf, groups=C)
-        x = F.avg_pool2d(x, kernel_size=2, stride=2)
+        x = F.avg_pool2d(x, kernel_size=args.super_sampling_factor, stride=args.super_sampling_factor)
         return x
     return A
 
@@ -234,6 +235,7 @@ if __name__ == '__main__':
     parser.add_argument("--zero_padding",       default=0,      type=int,           help="Zero padding in the forward model. Default is no zero-padding")
     parser.add_argument("--noise_rms",          default=0.01,   type=float,         help="White noise standard deviation added to the fake observation. If SLIC is provided, "
                                                                                          "a noise realisation from the SLIC model is used instead. ")
+    parser.add_argument("--super_sampling_factor", default=2,   type=int,           help="Factor by which the PSF is super sampled. ")
 
     # Which likelihood approximation to use?
     parser.add_argument("--diagonal_gaussian_likelihood", action="store_true",      help="Use the diagonal gaussian likelihood approximation")
