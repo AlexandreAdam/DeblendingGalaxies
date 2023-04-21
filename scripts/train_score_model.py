@@ -52,7 +52,6 @@ def main(args):
         raise ValueError
 
     hyperparameters["dynamic_range"] = args.dynamic_range
-    hyperparameters["factor"] = args.factor
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     ema = ExponentialMovingAverage(model.parameters(), decay=args.ema_decay)
    
