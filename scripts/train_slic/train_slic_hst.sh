@@ -3,7 +3,7 @@
 #SBATCH --cpus-per-task=1 # maximum cpu per task is 3.5 per gpus
 #SBATCH --gres=gpu:1
 #SBATCH --mem=32G			 # memory per node
-#SBATCH --time=00-01:00		# time (DD-HH:MM)
+#SBATCH --time=02-23:00		# time (DD-HH:MM)
 #SBATCH --account=rrg-lplevass
 #SBATCH --job-name=Train_SLIC_hst_psf_deconvolution
 #SBATCH --output=%x-%j.out
@@ -16,7 +16,7 @@ python $DEBLENDER/scripts/train_slic_with_psf.py\
   --epochs=10000\
   --learning_rate=5e-5\
   --max_time=70\
-  --batch_size=32\
+  --batch_size=8\
   --logdir=$DEBLENDER/logs/\
   --logname_prefixe=ncsnpp_hst_noise_psf_f814w_wfc3uv\
   --model_dir=$DEBLENDER/models/\
