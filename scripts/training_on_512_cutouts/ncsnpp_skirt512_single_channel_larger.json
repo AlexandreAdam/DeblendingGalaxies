@@ -1,7 +1,7 @@
 {
   "channels": 1,
-  "nf": 84,
-  "ch_mult": [2, 2, 2, 2, 2, 1, 1],
+  "nf": 64,
+  "ch_mult": [1, 2, 2, 2, 2, 1, 1],
   "image_size": 512,
   "activation_type": "swish",
   "resample_with_conv": true,

@@ -17,7 +17,7 @@ python $DEBLENDER/scripts/train_score_model.py\
   --epochs=10000\
   --learning_rate=2e-5\
   --max_time=70\
-  --batch_size=8\
+  --batch_size=6\
   --logdir=$DEBLENDER/logs/\
   --logname_prefixe=ncsnpp_skirt_g_larger\
   --model_dir=$DEBLENDER/models/\
