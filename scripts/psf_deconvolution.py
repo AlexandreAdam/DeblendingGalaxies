@@ -1,7 +1,7 @@
 from score_models import NCSNpp
 from functorch import grad, vmap
 from torch.nn import functional as F
-from definitions import interpolate, inverse_proprocessing
+from definitions import interpolate, inverse_proprocessing, ab_mag_to_jansky
 import json
 import numpy as np
 import torch
@@ -86,6 +86,8 @@ def main(args):
     if args.seed is not None:
         np.random.seed(args.seed)
         torch.manual_seed(args.seed)
+    if len(args.dataset_channels) > 1:
+        raise ValueError("Only single channel for now, until the script is tested for more")
 
     # Load model
     model_name = os.path.split(args.checkpoints_dir)[-1]
@@ -130,7 +132,9 @@ def main(args):
 
     if args.injection_test:
         with h5py.File(args.dataset_path, "r") as hf:
-            reference_profile = torch.tensor(hf[args.dataset_key][args.dataset_id]).to(DEVICE)[None, None] # single channel for now
+            reference_profile = torch.tensor(hf[args.dataset_key, ..., args.dataset_channels][args.dataset_id]).to(DEVICE)[None]
+        if args.dataset_channels_last:
+            reference_profile = torch.permute(reference_profile, (0, 3, 1, 2))  # put channels first
         observation = forward_model(reference_profile)
         # if args.slic_likelihood:
         #     print("Sampling a noise realisation from the SLIC model")
@@ -228,6 +232,8 @@ if __name__ == '__main__':
     parser.add_argument("--dataset_path",      default=None,                        help="Path to the h5 files with reference profiles for the injection test")
     parser.add_argument("--dataset_key",       default="images",                    help="Key to the reference profile in the dataset")
     parser.add_argument("--dataset_id",        default=None,    type=int,           help="Index for the reference profile to recover")
+    parser.add_argument("--dataset_channels",   nargs="+", default=0, type=int,     help="Channels of the dataset to use. ")
+    parser.add_argument("--dataset_channels_last", action="store_true",             help="If provided, then the channels of the dataset are found in the last dimension.")
     parser.add_argument("--observation_pixels", default=128,    type=int,           help="Make a fake observation with this number of pixels on a side")
     parser.add_argument("--observation_pixel_size", default=0.05, type=float,       help="Pixel size for the fake observation, in arcseconds")
     parser.add_argument("--model_pixels",       default=512,     type=int,          help="Number of pixels on a side for the model")
@@ -257,7 +263,7 @@ if __name__ == '__main__':
     # Samplers params
     parser.add_argument("-N", "--em_iterations", required=True,  type=int,           help="Total number of Euler-Maruyama steps to perform")
     parser.add_argument("-W", "--walkers",       default=1,      type=int,           help="Number of independent samples to produce")
-    parser.add_argument("-W", "--batch_size",    default=1,      type=int,           help="Batch size, number of samples to produce at a given moment")
+    parser.add_argument("-B", "--batch_size",    default=1,      type=int,           help="Batch size, number of samples to produce at a given moment")
 
     # Reproducibility params
     parser.add_argument("--seed",                default=None,   type=int,       help="Seed for the random number generators.")
