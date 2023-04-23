@@ -1,5 +1,5 @@
 from score_models import NCSNpp
-from functorch import grad, vmap
+from functorch import grad, vmap, vjp
 from torch.nn import functional as F
 from definitions import interpolate, inverse_proprocessing, ab_mag_to_jansky
 import json
@@ -120,8 +120,23 @@ def main(args):
         raise NotImplementedError("Real data mode not yet supported")
 
     if args.slic_likelihood:
-        # Would load the model
-        raise NotImplementedError("SLIC mode not yet supported")
+        # Load SLIC model
+        model_name = os.path.split(args.slic_model)[-1]
+        with open(os.path.join(args.slic_model, "model_hparams.json"), "r") as f:
+            hyperparameters = json.load(f)
+        slic_model = NCSNpp(**hyperparameters).to(DEVICE)
+        paths = glob(os.path.join(args.slic_model, "*.pt"))
+        checkpoints = [int(re.findall('[0-9]+', os.path.split(path)[-1])[-1]) for path in paths]
+        slic_model.eval()
+        for p in slic_model.parameters(): p.requires_grad = False  # being extra careful for some reasons
+        if args.slic_model_checkpoint is not None:
+            slic_model.load_state_dict(torch.load(paths[checkpoints == args.slic_model_checkpoint], map_location=DEVICE))
+            print(f"Loaded checkpoint {args.slic_model_checkpoint} of {model_name}")
+        else:
+            slic_model.load_state_dict(torch.load(paths[np.argmax(checkpoints)], map_location=DEVICE))
+            print(f"Loaded checkpoint {max(checkpoints)} of {model_name}")
+        slic_model = torch.nn.DataParallel(slic_model, device_ids=list(range(torch.cuda.device_count())))
+        #raise NotImplementedError("SLIC mode not yet supported")
 
     # TODO support multiple channels
     # Todo possibly convert pixel size from pc in Connor B. fits file to arcsec using a user specified Hubble constant and redshift
@@ -154,7 +169,13 @@ def main(args):
     elif args.pseudo_inverse_gaussian_likelihood:
         raise NotImplementedError("pseudo inverse likelihood not yet supported")
     elif args.slic_likelihood:
-        raise NotImplementedError("SLIC not yet supported")
+        def convolved_likelihood_gradient(x, t)
+            y_hat, vjpfunc = vjp(forward, x[None])
+            score = slic_model.score(observation - y_hat, t)
+            grad = vjpfunc(score)[0]
+            return -grad
+         # TODO do we need to vmap over convolved_likelihood_gradient?
+        #raise NotImplementedError("SLIC not yet supported")
 
     if args.from_prior:
         def score_fn(x, t):
@@ -252,6 +273,7 @@ if __name__ == '__main__':
     # TODO implement this
     parser.add_argument("--slic_likelihood",    action="store_true",                help="Use a trained SLIC model as an approximation for the likelihood")
     parser.add_argument("--slic_model",         default=None,                       help="Path to the slic model")
+    parser.add_argument("--slic_model_checkpoint",   default=None, type=int,        help="Index of the slic model checkpoint to load.")
 
     # Prior sampling mode, this will ignore everything about the data. Used for testing or generating training sets.
     parser.add_argument("--from_prior",         action="store_true",               help="Ignore the observation and sample from the prior")
