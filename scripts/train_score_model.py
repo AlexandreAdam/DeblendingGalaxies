@@ -4,6 +4,7 @@ from torch.utils.tensorboard import SummaryWriter
 from definitions import preprocessing, linear_preprocessing
 from datetime import datetime
 from tqdm import tqdm
+from torch.nn.functional import avg_pool2d
 import time
 import json
 import numpy as np
@@ -135,6 +136,8 @@ def main(args):
         cost = 0
         for batch, x in enumerate(dataset):
             start = time.time()
+            if args.downsample > 0:
+                x = avg_pool2d(x, kernel_size=2*args.downsample, stride=2*args.downsample)
             # preprocessing
             if args.linear_preprocessing:
                 x = linear_preprocessing(x)
@@ -247,7 +250,7 @@ if __name__ == '__main__':
 
     # Training set params
     parser.add_argument("--batch_size",             default=1,      type=int,       help="Number of images in a batch.")
-
+    parser.add_argument("--downsample",             default=0,   type=int,       help="Average pooling, if zero, no downsampling, if 1, then downsample by a factor of 2, etc. ")
     # logs
     parser.add_argument("--logdir",             default="None",                     help="Path of logs directory. Default if None, no logs recorded.")
     parser.add_argument("--logname",            default=None,                       help="Overwrite name of the log with this argument")
