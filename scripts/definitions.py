@@ -14,7 +14,7 @@ def preprocessing(img, dynamic_range=1e5):
     We want the diffusion to happen in log space so that generated images
     strictly have positive fluxHSC_SSP/pdr3_wide
 
-    We use log10(microJy) units instead of AB mag.
+    We use log10(microJy / arcsec^2) units instead of AB mag.
 
     dynamic_range: Sets the decimal value, in Jy, up to which we hope to model the surface
         brightness. This preprocessing destroys the information below the dynamic range,
