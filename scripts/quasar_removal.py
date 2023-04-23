@@ -2,8 +2,6 @@ from score_models import NCSNpp
 from functorch import grad, vmap
 from torch.nn import functional as F
 from definitions import interpolate, inverse_proprocessing
-from astropy.cosmology import FlatLambdaCDM
-import astropy.units as u
 import json
 import numpy as np
 import torch
@@ -23,10 +21,6 @@ N_WORKERS = int(os.getenv('SLURM_ARRAY_TASK_COUNT', 1))
 # this worker's array index. Assumes slurm array job is zero-indexed
 # defaults to one if not running under SLURM
 THIS_WORKER = int(os.getenv('SLURM_ARRAY_TASK_ID', 1))
-
-
-def rad_to_arcsec(theta):
-    return theta * 180 / np.pi * 3600
 
 
 def make_forward_model(args, psf):
@@ -92,13 +86,6 @@ def main(args):
         np.random.seed(args.seed)
         torch.manual_seed(args.seed)
 
-    # TODO support user specifying h0, Om0 and z
-    # if args.redshift is not None:
-    #     cosmo = FlatLambdaCDM(H0=args.h0, Om0=args.Om0, Tcmb0=2.725)
-    #     Ds = cosmo.angular_diameter_distance(args.redshift)
-    #     vars(args)["model_pixel_size"] = rad_to_arcsec((0.1 * u.kpc / Ds).decompose().value)
-    #     print(f"Model has pixel size {args.model_pixel_size} as and field of view {args.model_pixel_size * args.model_pixels} as")
-
     # Load model
     model_name = os.path.split(args.checkpoints_dir)[-1]
     with open(os.path.join(args.checkpoints_dir, "model_hparams.json"), "r") as f:
@@ -136,7 +123,7 @@ def main(args):
     # TODO support multiple channels
     # Todo possibly convert pixel size from pc in Connor B. fits file to arcsec using a user specified Hubble constant and redshift
     with fits.open(args.psf_fits) as data:
-        psf = data[args.psf_key].data[None]  # add the channel dimension, a single channel for now.
+        psf = data[args.psf_key].data[None] # add the channel dimension, a single channel for now.
 
     forward_model = make_forward_model(args, psf)
 
@@ -149,6 +136,7 @@ def main(args):
         #     OBSERVATION += slic_model.sample(OBSERVATION.shape, N=args.N)
         # else:
         observation += torch.randn_like(observation) * args.noise_rms
+
 
     if args.diagonal_gaussian_likelihood:
         def convolved_likelihood(x, t, sigma_n=args.noise_rms):
@@ -222,12 +210,8 @@ if __name__ == '__main__':
     from argparse import ArgumentParser
     parser = ArgumentParser()
     parser.add_argument("--experiment_name",    default="",                         help="Name of the output files")
-    parser.add_argument("--psf_fits",           required=True,                      help="Path to PSF fits file")
-    parser.add_argument("--psf_key",            required=True,                      help="Key to the PSF in the fits file")
-    parser.add_argument("-z", "--redshift",     default=None,                      help="Redshift at which to place the model, which has a resolution of 0.1 comoving kpc")
-    parser.add_argument("--h0",                 default=0.70,                       help="Hubble constant")
-    parser.add_argument("--Om0",                default=0.3,                        help="Matter density parameter")
-    parser.add_argument("--")
+    parser.add_argument("--psf_fits",           required=True,                       help="Path to PSF fits file")
+    parser.add_argument("--psf_key",            required=True,                       help="Key to the PSF in the fits file")
 
     # REAL DATA MODEL TODO write the code for this mode
     # With real data, we only have access to the observation itself and the PSF
@@ -246,6 +230,7 @@ if __name__ == '__main__':
     parser.add_argument("--observation_pixels", default=128,    type=int,           help="Make a fake observation with this number of pixels on a side")
     parser.add_argument("--observation_pixel_size", default=0.05, type=float,       help="Pixel size for the fake observation, in arcseconds")
     parser.add_argument("--model_pixels",       default=512,     type=int,          help="Number of pixels on a side for the model")
+    parser.add_argument("--model_pixel_size",   default=0.025,  type=float,         help="Size of a pixel for the model, in arcseconds")
     parser.add_argument("--zero_padding",       default=0,      type=int,           help="Zero padding in the forward model. Default is no zero-padding")
     parser.add_argument("--noise_rms",          default=0.01,   type=float,         help="White noise standard deviation added to the fake observation. If SLIC is provided, "
                                                                                          "a noise realisation from the SLIC model is used instead. ")
