@@ -104,23 +104,7 @@ def main(args):
         raise NotImplementedError("Real data mode not yet supported")
 
     if args.slic_likelihood:
-        # Load SLIC model
-        model_name = os.path.split(args.slic_model)[-1]
-        with open(os.path.join(args.slic_model, "model_hparams.json"), "r") as f:
-            hyperparameters = json.load(f)
-        slic_model = NCSNpp(**hyperparameters).to(DEVICE)
-        paths = glob(os.path.join(args.slic_model, "checkpoint*.pt"))
-        checkpoints = [int(re.findall('[0-9]+', os.path.split(path)[-1])[-1]) for path in paths]
-        slic_model.eval()
-        for p in slic_model.parameters(): p.requires_grad = False  # being extra careful for some reasons
-        if args.slic_model_checkpoint is not None:
-            slic_model.load_state_dict(torch.load(paths[checkpoints == args.slic_model_checkpoint], map_location=DEVICE))
-            print(f"Loaded checkpoint {args.slic_model_checkpoint} of {model_name}")
-        else:
-            slic_model.load_state_dict(torch.load(paths[np.argmax(checkpoints)], map_location=DEVICE))
-            print(f"Loaded checkpoint {max(checkpoints)} of {model_name}")
-        slic_model = torch.nn.DataParallel(slic_model, device_ids=list(range(torch.cuda.device_count())))
-        #raise NotImplementedError("SLIC mode not yet supported")
+        slic_model = load_model(args.slic_model, architecture=NCSNpp, data_parallel=True, model_checkpoint=args.model_checkpoint)
 
     # TODO support multiple channels
     # Todo possibly convert pixel size from pc in Connor B. fits file to arcsec using a user specified Hubble constant and redshift
