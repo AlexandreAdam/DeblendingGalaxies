@@ -94,7 +94,7 @@ def main(args):
     with open(os.path.join(args.checkpoints_dir, "model_hparams.json"), "r") as f:
         hyperparameters = json.load(f)
     model = NCSNpp(**hyperparameters).to(DEVICE)
-    paths = glob(os.path.join(args.checkpoints_dir, "*.pt"))
+    paths = glob(os.path.join(args.checkpoints_dir, "checkpoint*.pt"))
     checkpoints = [int(re.findall('[0-9]+', os.path.split(path)[-1])[-1]) for path in paths]
     model.eval()
     for p in model.parameters(): p.requires_grad = False  # being extra careful for some reasons

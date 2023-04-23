@@ -24,7 +24,8 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --model_pixel_size=0.01\
   --noise_rms=1e-1\
   --super_sampling_factor=4\
-  --diagonal_gaussian_likelihood\
+  --slic_likelihood\
+  --slic_model=ncsnpp_hst_noise_psf_f814w_wfc3uv_230421041030\
   --result_dir=$DEBLENDER/results/\
   --checkpoints_dir=$DEBLENDER/ncsnpp_skirt_g_larger_230421030814/\
   -N=8000\
