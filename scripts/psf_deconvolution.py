@@ -1,7 +1,7 @@
 from score_models import NCSNpp
 from functorch import grad, vmap, vjp
 from torch.nn import functional as F
-from definitions import interpolate, inverse_proprocessing, ab_mag_to_jansky
+from definitions import interpolate, DEVICE, load_model, inverse_proprocessing, ab_mag_to_jansky
 import json
 import numpy as np
 import torch
@@ -12,7 +12,6 @@ import h5py
 import re
 from tqdm import tqdm
 
-DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
 
 # total number of slurm workers detected
 # defaults to 1 if not running under SLURM
@@ -90,24 +89,9 @@ def main(args):
         raise ValueError("Only single channel for now, until the script is tested for more")
 
     # Load model
-    model_name = os.path.split(args.checkpoints_dir)[-1]
-    with open(os.path.join(args.checkpoints_dir, "model_hparams.json"), "r") as f:
-        hyperparameters = json.load(f)
-    model = NCSNpp(**hyperparameters).to(DEVICE)
-    paths = glob(os.path.join(args.checkpoints_dir, "checkpoint*.pt"))
-    checkpoints = [int(re.findall('[0-9]+', os.path.split(path)[-1])[-1]) for path in paths]
-    model.eval()
-    for p in model.parameters(): p.requires_grad = False  # being extra careful for some reasons
-    if args.model_checkpoint is not None:
-        model.load_state_dict(torch.load(paths[checkpoints == args.model_checkpoint], map_location=DEVICE))
-        print(f"Loaded checkpoint {args.model_checkpoint} of {model_name}")
-    else:
-        model.load_state_dict(torch.load(paths[np.argmax(checkpoints)], map_location=DEVICE))
-        print(f"Loaded checkpoint {max(checkpoints)} of {model_name}")
-    model = torch.nn.DataParallel(model, device_ids=list(range(torch.cuda.device_count())))
-
+    prior_model = load_model(args.checkpoint, architecture=NCSNpp, data_parallel=True, model_checkpoint=args.model_checkpoint)
     # Hack the VESDE in the model for readability
-    sde = model.module.sde
+    sde = prior_model.module.sde # .module is a hack to
     sigma_min = sde.sigma_min
     sigma_max = sde.sigma_max
     def sigma(t): # scale of the marginal prob. distiribution
@@ -125,7 +109,7 @@ def main(args):
         with open(os.path.join(args.slic_model, "model_hparams.json"), "r") as f:
             hyperparameters = json.load(f)
         slic_model = NCSNpp(**hyperparameters).to(DEVICE)
-        paths = glob(os.path.join(args.slic_model, "*.pt"))
+        paths = glob(os.path.join(args.slic_model, "checkpoint*.pt"))
         checkpoints = [int(re.findall('[0-9]+', os.path.split(path)[-1])[-1]) for path in paths]
         slic_model.eval()
         for p in slic_model.parameters(): p.requires_grad = False  # being extra careful for some reasons
@@ -141,7 +125,7 @@ def main(args):
     # TODO support multiple channels
     # Todo possibly convert pixel size from pc in Connor B. fits file to arcsec using a user specified Hubble constant and redshift
     with fits.open(args.psf_fits) as data:
-        psf = data[args.psf_key].data[None] # add the channel dimension, a single channel for now.
+        psf = data[args.psf_key].data[None].astype(np.float32) # add the channel dimension, a single channel for now.
 
     forward_model = make_forward_model(args, psf)
 
@@ -151,11 +135,11 @@ def main(args):
         if args.dataset_channels_last:
             reference_profile = torch.permute(reference_profile, (0, 3, 1, 2))  # put channels first
         observation = forward_model(reference_profile)
-        # if args.slic_likelihood:
-        #     print("Sampling a noise realisation from the SLIC model")
-        #     OBSERVATION += slic_model.sample(OBSERVATION.shape, N=args.N)
-        # else:
-        observation += torch.randn_like(observation) * args.noise_rms
+        if args.slic_likelihood:
+            print("Sampling a noise realisation from the SLIC model")
+            observation += slic_model.sample(observation.shape, N=args.N)
+        else:
+            observation += torch.randn_like(observation) * args.noise_rms
 
 
     if args.diagonal_gaussian_likelihood:
@@ -169,24 +153,24 @@ def main(args):
     elif args.pseudo_inverse_gaussian_likelihood:
         raise NotImplementedError("pseudo inverse likelihood not yet supported")
     elif args.slic_likelihood:
-        def convolved_likelihood_gradient(x, t)
-            y_hat, vjpfunc = vjp(forward, x[None])
+        def convolved_likelihood_gradient(x, t):
+            y_hat, vjpfunc = vjp(forward_model, x)
             score = slic_model.score(observation - y_hat, t)
             grad = vjpfunc(score)[0]
             return -grad
-         # TODO do we need to vmap over convolved_likelihood_gradient?
+         # TODO do we need to vmap over convolved_likelihood_gradient? -> no, observation and vjp can be broadcasted by default.
         #raise NotImplementedError("SLIC not yet supported")
 
     if args.from_prior:
         def score_fn(x, t):
             B, *D = x.shape
-            prior_score = model(x, t) / sigma(t).view(B, *[1]*len(D))
+            prior_score = prior_model(x, t) / sigma(t).view(B, *[1]*len(D))
             return prior_score
     else:
         # Sample from the posterior
         def score_fn(x, t):
             B, *D = x.shape
-            prior_score = model(x, t) / sigma(t).view(B, *[1]*len(D))
+            prior_score = prior_model(x, t) / sigma(t).view(B, *[1]*len(D))
             likelihood_score = convolved_likelihood_gradient(x, t)
             return prior_score + likelihood_score
 

@@ -1,6 +1,6 @@
 {
   "channels": 1,
-  "nf": 64,
+  "nf": 128,
   "ch_mult": [1, 2, 2, 2, 2, 1, 1],
   "image_size": 512,
   "activation_type": "swish",
