@@ -3,7 +3,8 @@ from functorch import grad, vmap, vjp
 from torch.nn import functional as F
 from astropy.cosmology import FlatLambdaCDM
 import astropy.units as u
-from definitions import interpolate, DEVICE, load_model, inverse_proprocessing, ab_mag_to_jansky
+from torchvision.transforms import CenterCrop
+from definitions import interpolate, DEVICE, load_model, ab_mag_to_jansky_per_arcsec_squared
 import json
 import numpy as np
 import torch
@@ -41,7 +42,7 @@ def make_forward_model(args, psf):
         0) Possible zero-padding. Default is no padding in the script.
         1) Interpolation of the model to twice the size of the observed image
         2) PSF convolution
-        3) Pixelization (2d Average pooling with stride=2)
+        3) Pixelization (2d Average pooling)
 
     Note that A does not include any preprocessing of the generated image. This must be done explicitly in the likelihood
         function. It is important to keep track of such a transformation (which might be non-linear) in the gradient of
@@ -94,12 +95,11 @@ def main(args):
     if len(args.dataset_channels) > 1:
         raise ValueError("Only single channel for now, until the script is tested for more")
 
-    # TODO support user specifying h0, Om0 and z
-    # if args.redshift is not None:
-    #     cosmo = FlatLambdaCDM(H0=args.h0, Om0=args.Om0, Tcmb0=2.725)
-    #     Ds = cosmo.angular_diameter_distance(args.redshift)
-    #     vars(args)["model_pixel_size"] = rad_to_arcsec((0.1 * u.kpc / Ds).decompose().value)
-    #     print(f"Model has pixel size {args.model_pixel_size} as and field of view {args.model_pixel_size * args.model_pixels} as")
+    if args.redshift is not None:
+        cosmo = FlatLambdaCDM(H0=args.h0, Om0=args.Om0, Tcmb0=2.725)
+        Ds = cosmo.angular_diameter_distance(args.redshift)
+        vars(args)["model_pixel_size"] = rad_to_arcsec((0.1 * u.kpc / Ds).decompose().value)
+        print(f"Model has pixel size {args.model_pixel_size} as and field of view {args.model_pixel_size * args.model_pixels} as")
 
     # Load model
     prior_model = load_model(args.checkpoint, architecture=NCSNpp, data_parallel=True, model_checkpoint=args.model_checkpoint)
@@ -133,15 +133,20 @@ def main(args):
             reference_profile = torch.permute(reference_profile, (0, 3, 1, 2))  # put channels first
         observation = forward_model(reference_profile)
         if args.slic_likelihood:
-            print("Sampling a noise realisation from the SLIC model")
-            observation += slic_model.sample(observation.shape, N=args.N)
+            print(f"Using noise map {args.noise_map} | id = {args.noise_index}")
+            with h5py.File(args.noise_map, "r") as hf:
+                noise = hf[args.noise_key][args.noise_index] # TODO support multiple channels
+                *_, H, W = noise.shape
+                noise = torch.tensor(noise).view(1, 1, H, W).to(DEVICE)
+                noise = CenterCrop(args.observation_pixels)(noise)
+                observation += noise
         else:
+            print(f"Using Gaussian noise with rms = {args.noise_rms}")
             observation += torch.randn_like(observation) * args.noise_rms
 
     if args.diagonal_gaussian_likelihood:
         def convolved_likelihood(x, t, sigma_n=args.noise_rms):
             var = (sigma_n**2 + sigma(t)**2).view(*[1]*len(observation.shape))
-            # TODO include invert_preprocessing here to make sure gradient picks it up
             y_hat = forward_model(x[None])
             ll = torch.sum(-0.5 * torch.square(observation - y_hat) / var)
             return ll
@@ -155,7 +160,6 @@ def main(args):
             grad = vjpfunc(score)[0]
             return -grad
          # TODO do we need to vmap over convolved_likelihood_gradient? -> no, observation and vjp can be broadcasted by default.
-        #raise NotImplementedError("SLIC not yet supported")
 
     if args.from_prior:
         def score_fn(x, t):
@@ -223,7 +227,7 @@ if __name__ == '__main__':
     parser.add_argument("--Om0",                default=0.3,                        help="Matter density parameter")
     parser.add_argument("--")
 
-    # REAL DATA MODEL TODO write the code for this mode
+    # REAL DATA MODEL TODO write the code for this mode -> requires handling HST units conversion and possibly others
     # With real data, we only have access to the observation itself and the PSF
     parser.add_argument("--real_data",          action="store_true",                help="Real data mode. This mode requires a "
                                                                                          "fits file for the observation and a fits file for the PSF. "
@@ -253,7 +257,6 @@ if __name__ == '__main__':
     parser.add_argument("--pseudo_inverse_gaussian_likelihood", action="store_true", help="Use the pseudo-inverse of the forward model to get a "
                                                                                           "better approximation of the likelihood term. This is more accurate, but "
                                                                                           "also more costly to evaluate.")
-    # TODO implement this
     parser.add_argument("--slic_likelihood",    action="store_true",                help="Use a trained SLIC model as an approximation for the likelihood")
     parser.add_argument("--slic_model",         default=None,                       help="Path to the slic model")
     parser.add_argument("--slic_model_checkpoint",   default=None, type=int,        help="Index of the slic model checkpoint to load.")

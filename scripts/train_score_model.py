@@ -1,7 +1,7 @@
 from score_models import DDPM, NCSNpp
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from definitions import preprocessing
+from definitions import preprocessing, linear_preprocessing
 from datetime import datetime
 from tqdm import tqdm
 import time
@@ -52,6 +52,7 @@ def main(args):
         raise ValueError
 
     hyperparameters["dynamic_range"] = args.dynamic_range
+    hyperparameters["linear_preprocessing"] = args.linear_preprocessing
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     ema = ExponentialMovingAverage(model.parameters(), decay=args.ema_decay)
    
@@ -135,7 +136,10 @@ def main(args):
         for batch, x in enumerate(dataset):
             start = time.time()
             # preprocessing
-            x = preprocessing(x, dynamic_range=args.dynamic_range)
+            if args.linear_preprocessing:
+                x = linear_preprocessing(x)
+            else:
+                x = preprocessing(x, dynamic_range=args.dynamic_range)
             # optimize network
             optimizer.zero_grad()
             loss = loss_fn(x)
@@ -225,6 +229,7 @@ if __name__ == '__main__':
     parser.add_argument("--model_id",           default="none",                     help="The script will search in provided model_dir argument for model_id and load checkpoint if it exists.")
     parser.add_argument("--model_checkpoint",   default=None,       type=int,       help="Index of the checkpoint to load.")
     parser.add_argument("--dynamic_range",		default=1e5,		type=float)
+    parser.add_argument("--linear_preprocessing", action="store_true",              help="Diffusion happens in physical flux units space, with units 10 micro Jy / as^2")
 
     # Model parameters
     parser.add_argument("--model_parameters",               required=True,                  help="Path to model parameter json file.")

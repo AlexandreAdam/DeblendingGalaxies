@@ -8,30 +8,63 @@ DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 # The following conversion are wrt to the 3631 Jy zero point
-def ab_mag_to_jansky(img): 
+def ab_mag_to_jansky_per_arcsec_squared(img):
     return 10**(-(img - 8.9) / 2.5)
+
+
+def electron_count_to_ab_mag(img, photflam, photplam, minimum_count):
+    """
+    Assumes img is a torch tensor, expressed in electron / sec units.
+
+    photflam and photplam are usually found in HST fits file headers, and refer to the
+    inverse sensitivity (in erg/cm^2/sec/Angstrom) and the pivot wavelength respectively.
+    See https://hst-docs.stsci.edu/acsdhb/chapter-5-acs-data-analysis/5-1-photometry.
+
+    """
+    zero_point = -2.5 * np.log10(photflam) - 21.10 - 5 * np.log10(photplam) + 18.6921
+    return -2.5 * torch.log(torch.maximum(torch.ones_like(img) * minimum_count, img)) / LOG10 + zero_point
+
+
+def hst_observation_preprocessing(img, photflam, photplam, minimum_count):
+    img = electron_count_to_ab_mag(img, photflam, photplam, minimum_count)
+    img = ab_mag_to_jansky_per_arcsec_squared(img)
+    return img
 
 
 def preprocessing(img, dynamic_range=1e5):
     """
     We want the diffusion to happen in log space so that generated images
-    strictly have positive fluxHSC_SSP/pdr3_wide
+    strictly have positive flux.
 
-    We use log10(microJy / arcsec^2) units instead of AB mag.
+    We use log10(micro Jansky / arcsec^2) units instead of AB mag.
 
-    dynamic_range: Sets the decimal value, in Jy, up to which we hope to model the surface
+    dynamic_range: Sets the decimal value, in Jansky, up to which we hope to model the surface
         brightness. This preprocessing destroys the information below the dynamic range,
         or too faint by our criteria.
     In the end, most pixel values should roughly fall in the range
     [0, log10(dynamic_range)].
     """
-    img = ab_mag_to_jansky(img)
+    img = ab_mag_to_jansky_per_arcsec_squared(img)
     return torch.log(1e6 * img + 1/dynamic_range) / np.log(10.) + np.log10(dynamic_range)
+
+
+def linear_preprocessing(img):
+    """
+    For usage in inverse problem, we need the processing to be linear. For that reason,
+    we only rescale the flux units with linear operations.
+
+    We use 10 micro Jansky / arcsec^2 units instead of AB mag.
+
+    With this approach, the dynamic range is set by the maximum intensity present in the data,
+    which should not much bigger than 20 (which is the equivalent of AB mag 18 in our unit system).
+    """
+    img = ab_mag_to_jansky_per_arcsec_squared(img)
+    return 1e5 * img
 
 
 def inverse_proprocessing(img, dynamic_range=1e5):
     """
-    Take a generated image and return it in micro Jy. Note that
+    Take a generated image and return it in micro Jansky / arcsec^2. Note that
     this is not a strict inverse. Only the signal in our dynamic range is recovered. 
     """
     return 10**(img - np.log10(dynamic_range))
