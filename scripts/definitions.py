@@ -1,7 +1,10 @@
 import numpy as np
 import torch
+import os, json, re
+from glob import glob
 
 LOG10 = np.log(10.)
+DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 # The following conversion are wrt to the 3631 Jy zero point
@@ -14,7 +17,7 @@ def preprocessing(img, dynamic_range=1e5):
     We want the diffusion to happen in log space so that generated images
     strictly have positive fluxHSC_SSP/pdr3_wide
 
-    We use log10(microJy) units instead of AB mag.
+    We use log10(microJy / arcsec^2) units instead of AB mag.
 
     dynamic_range: Sets the decimal value, in Jy, up to which we hope to model the surface
         brightness. This preprocessing destroys the information below the dynamic range,
@@ -66,3 +69,25 @@ def interpolate(image, coordinates):
 
     _, new_H, new_W = coordinates.shape
     return (wa * Ia + wb * Ib + wc * Ic + wd * Id).view(C, new_H, new_W)
+
+
+def load_model(checkpoint_dir, architecture, data_parallel=False, model_checkpoint=None):
+    model_name = os.path.split(checkpoint_dir)[-1]
+    with open(os.path.join(checkpoint_dir, "model_hparams.json"), "r") as f:
+        hyperparameters = json.load(f)
+    model = architecture(**hyperparameters).to(DEVICE)
+    paths = glob(os.path.join(checkpoint_dir, "checkpoint*.pt"))
+    checkpoints = [int(re.findall('[0-9]+', os.path.split(path)[-1])[-1]) for path in paths]
+    model.eval()
+    for p in model.parameters(): p.requires_grad = False  # being extra careful for some reasons
+    model.load_state_dict(torch.load(paths[np.argmax(checkpoints)], map_location=DEVICE))
+    print(f"Loaded checkpoint {max(checkpoints)} of {model_name}")
+    if model_checkpoint is not None:
+        model.load_state_dict(torch.load(paths[checkpoints == model_checkpoint], map_location=DEVICE))
+        print(f"Loaded checkpoint {model_checkpoint} of {model_name}")
+    else:
+        model.load_state_dict(torch.load(paths[np.argmax(checkpoints)], map_location=DEVICE))
+        print(f"Loaded checkpoint {max(checkpoints)} of {model_name}")
+    if data_parallel:
+        model = torch.nn.DataParallel(model, device_ids=list(range(torch.cuda.device_count())))
+    return model

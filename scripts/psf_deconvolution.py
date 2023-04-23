@@ -1,9 +1,9 @@
 from score_models import NCSNpp
-from functorch import grad, vmap
+from functorch import grad, vmap, vjp
 from torch.nn import functional as F
-from definitions import interpolate, inverse_proprocessing
 from astropy.cosmology import FlatLambdaCDM
 import astropy.units as u
+from definitions import interpolate, DEVICE, load_model, inverse_proprocessing, ab_mag_to_jansky
 import json
 import numpy as np
 import torch
@@ -14,7 +14,6 @@ import h5py
 import re
 from tqdm import tqdm
 
-DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
 
 # total number of slurm workers detected
 # defaults to 1 if not running under SLURM
@@ -49,7 +48,7 @@ def make_forward_model(args, psf):
         the likelihood function, thus this function is not the right place for it.
 
     Assumes psf is a 3D numpy array, with channels first. I assume PSF has the same number of channels as the observation.
-        TODO: support more than one channels in the script. Requires either a prior trained on all channels or separate priors for each
+        #TODO: support more than one channels in the script. Requires either a prior trained on all channels or separate priors for each
 
     args must have the following elements in its namespace:
         dynamic_range: The dynamic range of the prior, which specifies how we recover micro Jansky units. This parameter
@@ -67,22 +66,23 @@ def make_forward_model(args, psf):
     """
     C, H, W = psf.shape
     psf = torch.tensor(psf).to(DEVICE).view(C, 1, H, W) # reshape to a convolution kernel [channel_out, channels_in/groups, H, W]
-    batched_interpolation = vmap(interpolate, in_dims=({'image': 0, 'coordinates': None},))  # only batch over the images
+    batched_interpolation = vmap(interpolate, in_dims=(0, None))  # only batch over the images
 
-    # define target coordinates at twice the number of pixels of the observed image
+    # TODO support a shift of the ccordinates
+    # define target coordinates at the super sampling resolution of the psf
     fov = args.observation_pixel_size * args.observation_pixels
-    x = torch.linspace(-1, 1, 2*args.observation_pixels).float() * fov / 2
-    x, y = torch.meshgrid(x, x, indexing="ij")
+    x = torch.linspace(-1, 1, args.super_sampling_factor*args.observation_pixels).float() * fov / 2
+    x, y = torch.meshgrid(x, x, indexing="ij")  # TODO make this coherent with WCS
     # Transform these coordinates into model pixel indices
     _min = - args.model_pixel_size * (args.model_pixels + args.zero_padding) / 2
     i_coord = (x - _min) / args.model_pixel_size
     j_coord = (y - _min) / args.model_pixel_size
-    coordinates = torch.stack([i_coord, j_coord], dim=0)
+    coordinates = torch.stack([i_coord, j_coord], dim=0).to(DEVICE)
     def A(x):
         x = F.pad(x, pad=[args.zero_padding]*4, mode="constant", value=0.)
         x = batched_interpolation(x, coordinates)
-        x = F.conv2d(x, psf, groups=C)
-        x = F.avg_pool2d(x, kernel_size=2, stride=2)
+        x = F.conv2d(x, psf, groups=C, padding="same")
+        x = F.avg_pool2d(x, kernel_size=args.super_sampling_factor, stride=args.super_sampling_factor)
         return x
     return A
 
@@ -91,6 +91,8 @@ def main(args):
     if args.seed is not None:
         np.random.seed(args.seed)
         torch.manual_seed(args.seed)
+    if len(args.dataset_channels) > 1:
+        raise ValueError("Only single channel for now, until the script is tested for more")
 
     # TODO support user specifying h0, Om0 and z
     # if args.redshift is not None:
@@ -100,24 +102,9 @@ def main(args):
     #     print(f"Model has pixel size {args.model_pixel_size} as and field of view {args.model_pixel_size * args.model_pixels} as")
 
     # Load model
-    model_name = os.path.split(args.checkpoints_dir)[-1]
-    with open(os.path.join(args.checkpoints_dir, "model_hparams.json"), "r") as f:
-        hyperparameters = json.load(f)
-    model = NCSNpp(**hyperparameters).to(DEVICE)
-    paths = glob(os.path.join(args.checkpoints_dir, "*.pt"))
-    checkpoints = [int(re.findall('[0-9]+', os.path.split(path)[-1])[-1]) for path in paths]
-    model.eval()
-    for p in model.parameters(): p.requires_grad = False  # being extra careful for some reasons
-    if args.model_checkpoint is not None:
-        model.load_state_dict(torch.load(paths[checkpoints == args.model_checkpoint], map_location=DEVICE))
-        print(f"Loaded checkpoint {args.model_checkpoint} of {model_name}")
-    else:
-        model.load_state_dict(torch.load(paths[np.argmax(checkpoints)], map_location=DEVICE))
-        print(f"Loaded checkpoint {max(checkpoints)} of {model_name}")
-    model = torch.nn.DataParallel(model, device_ids=list(range(torch.cuda.device_count())))
-
+    prior_model = load_model(args.checkpoint, architecture=NCSNpp, data_parallel=True, model_checkpoint=args.model_checkpoint)
     # Hack the VESDE in the model for readability
-    sde = model.module.sde
+    sde = prior_model.module.sde # .module is a hack to
     sigma_min = sde.sigma_min
     sigma_max = sde.sigma_max
     def sigma(t): # scale of the marginal prob. distiribution
@@ -130,25 +117,26 @@ def main(args):
         raise NotImplementedError("Real data mode not yet supported")
 
     if args.slic_likelihood:
-        # Would load the model
-        raise NotImplementedError("SLIC mode not yet supported")
+        slic_model = load_model(args.slic_model, architecture=NCSNpp, data_parallel=True, model_checkpoint=args.model_checkpoint)
 
     # TODO support multiple channels
     # Todo possibly convert pixel size from pc in Connor B. fits file to arcsec using a user specified Hubble constant and redshift
     with fits.open(args.psf_fits) as data:
-        psf = data[args.psf_key].data[None]  # add the channel dimension, a single channel for now.
+        psf = data[args.psf_key].data[None].astype(np.float32) # add the channel dimension, a single channel for now.
 
     forward_model = make_forward_model(args, psf)
 
     if args.injection_test:
         with h5py.File(args.dataset_path, "r") as hf:
-            reference_profile = torch.tensor(hf[args.dataset_key][args.dataset_id]).to(DEVICE)[None, None] # single channel for now
+            reference_profile = torch.tensor(hf[args.dataset_key, ..., args.dataset_channels][args.dataset_id]).to(DEVICE)[None]
+        if args.dataset_channels_last:
+            reference_profile = torch.permute(reference_profile, (0, 3, 1, 2))  # put channels first
         observation = forward_model(reference_profile)
-        # if args.slic_likelihood:
-        #     print("Sampling a noise realisation from the SLIC model")
-        #     OBSERVATION += slic_model.sample(OBSERVATION.shape, N=args.N)
-        # else:
-        observation += torch.randn_like(observation) * args.noise_rms
+        if args.slic_likelihood:
+            print("Sampling a noise realisation from the SLIC model")
+            observation += slic_model.sample(observation.shape, N=args.N)
+        else:
+            observation += torch.randn_like(observation) * args.noise_rms
 
     if args.diagonal_gaussian_likelihood:
         def convolved_likelihood(x, t, sigma_n=args.noise_rms):
@@ -161,18 +149,24 @@ def main(args):
     elif args.pseudo_inverse_gaussian_likelihood:
         raise NotImplementedError("pseudo inverse likelihood not yet supported")
     elif args.slic_likelihood:
-        raise NotImplementedError("SLIC not yet supported")
+        def convolved_likelihood_gradient(x, t):
+            y_hat, vjpfunc = vjp(forward_model, x)
+            score = slic_model.score(observation - y_hat, t)
+            grad = vjpfunc(score)[0]
+            return -grad
+         # TODO do we need to vmap over convolved_likelihood_gradient? -> no, observation and vjp can be broadcasted by default.
+        #raise NotImplementedError("SLIC not yet supported")
 
     if args.from_prior:
         def score_fn(x, t):
             B, *D = x.shape
-            prior_score = model(x, t) / sigma(t).view(B, *[1]*len(D))
+            prior_score = prior_model(x, t) / sigma(t).view(B, *[1]*len(D))
             return prior_score
     else:
         # Sample from the posterior
         def score_fn(x, t):
             B, *D = x.shape
-            prior_score = model(x, t) / sigma(t).view(B, *[1]*len(D))
+            prior_score = prior_model(x, t) / sigma(t).view(B, *[1]*len(D))
             likelihood_score = convolved_likelihood_gradient(x, t)
             return prior_score + likelihood_score
 
@@ -243,12 +237,15 @@ if __name__ == '__main__':
     parser.add_argument("--dataset_path",      default=None,                        help="Path to the h5 files with reference profiles for the injection test")
     parser.add_argument("--dataset_key",       default="images",                    help="Key to the reference profile in the dataset")
     parser.add_argument("--dataset_id",        default=None,    type=int,           help="Index for the reference profile to recover")
+    parser.add_argument("--dataset_channels",   nargs="+", default=0, type=int,     help="Channels of the dataset to use. ")
+    parser.add_argument("--dataset_channels_last", action="store_true",             help="If provided, then the channels of the dataset are found in the last dimension.")
     parser.add_argument("--observation_pixels", default=128,    type=int,           help="Make a fake observation with this number of pixels on a side")
     parser.add_argument("--observation_pixel_size", default=0.05, type=float,       help="Pixel size for the fake observation, in arcseconds")
     parser.add_argument("--model_pixels",       default=512,     type=int,          help="Number of pixels on a side for the model")
     parser.add_argument("--zero_padding",       default=0,      type=int,           help="Zero padding in the forward model. Default is no zero-padding")
     parser.add_argument("--noise_rms",          default=0.01,   type=float,         help="White noise standard deviation added to the fake observation. If SLIC is provided, "
                                                                                          "a noise realisation from the SLIC model is used instead. ")
+    parser.add_argument("--super_sampling_factor", default=2,   type=int,           help="Factor by which the PSF is super sampled. ")
 
     # Which likelihood approximation to use?
     parser.add_argument("--diagonal_gaussian_likelihood", action="store_true",      help="Use the diagonal gaussian likelihood approximation")
@@ -259,6 +256,7 @@ if __name__ == '__main__':
     # TODO implement this
     parser.add_argument("--slic_likelihood",    action="store_true",                help="Use a trained SLIC model as an approximation for the likelihood")
     parser.add_argument("--slic_model",         default=None,                       help="Path to the slic model")
+    parser.add_argument("--slic_model_checkpoint",   default=None, type=int,        help="Index of the slic model checkpoint to load.")
 
     # Prior sampling mode, this will ignore everything about the data. Used for testing or generating training sets.
     parser.add_argument("--from_prior",         action="store_true",               help="Ignore the observation and sample from the prior")
@@ -270,7 +268,7 @@ if __name__ == '__main__':
     # Samplers params
     parser.add_argument("-N", "--em_iterations", required=True,  type=int,           help="Total number of Euler-Maruyama steps to perform")
     parser.add_argument("-W", "--walkers",       default=1,      type=int,           help="Number of independent samples to produce")
-    parser.add_argument("-W", "--batch_size",    default=1,      type=int,           help="Batch size, number of samples to produce at a given moment")
+    parser.add_argument("-B", "--batch_size",    default=1,      type=int,           help="Batch size, number of samples to produce at a given moment")
 
     # Reproducibility params
     parser.add_argument("--seed",                default=None,   type=int,       help="Seed for the random number generators.")

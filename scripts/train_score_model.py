@@ -1,7 +1,6 @@
 from score_models import DDPM, NCSNpp
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from torchvision import transforms as T
 from definitions import preprocessing
 from datetime import datetime
 from tqdm import tqdm
@@ -53,7 +52,6 @@ def main(args):
         raise ValueError
 
     hyperparameters["dynamic_range"] = args.dynamic_range
-    hyperparameters["factor"] = args.factor
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     ema = ExponentialMovingAverage(model.parameters(), decay=args.ema_decay)
    
