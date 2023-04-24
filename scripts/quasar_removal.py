@@ -4,13 +4,15 @@ from torch.nn import functional as F
 from astropy.cosmology import FlatLambdaCDM
 import astropy.units as u
 from torchvision.transforms import CenterCrop
-from definitions import interpolate, DEVICE, load_model, ab_mag_to_jansky_per_arcsec_squared
+from definitions import interpolate, DEVICE, load_model, inverse_proprocessing, ab_mag_to_jansky_per_arcsec_squared
 import json
 import numpy as np
 import torch
 import os
+from glob import glob
 from astropy.io import fits
 import h5py
+import re
 from tqdm import tqdm
 
 
@@ -27,7 +29,7 @@ def rad_to_arcsec(theta):
     return theta * 180 / np.pi * 3600
 
 
-def make_forward_model(args, psf):
+def make_forward_model(args, psf, quasar_psf=None):
     """
     Takes in argument specifying the size of the model (number of pixels, size of the pixels)
     and the target size (number of pixels in the image, size of the pixels). It also takes in a psf
@@ -40,6 +42,7 @@ def make_forward_model(args, psf):
         0) Possible zero-padding. Default is no padding in the script.
         1) Interpolation of the model to twice the size of the observed image
         2) PSF convolution
+        3) Add quasar at provided position, with a possibly more detailed PSF model
         3) Pixelization (2d Average pooling)
 
     Note that A does not include any preprocessing of the generated image. This must be done explicitly in the likelihood
@@ -64,18 +67,22 @@ def make_forward_model(args, psf):
     # TODO support a more sophisticated coordinate systems with astropy WCS.
     """
     C, H, W = psf.shape
+    if quasar_psf is None:
+        quasar_psf = psf
+    quasar_psf = torch.tensor(quasar_psf).to(DEVICE).view(C, 1, H, W)
     psf = torch.tensor(psf).to(DEVICE).view(C, 1, H, W) # reshape to a convolution kernel [channel_out, channels_in/groups, H, W]
     batched_interpolation = vmap(interpolate, in_dims=(0, None))  # only batch over the images
 
-    # TODO support a shift of the ccordinates
+    # TODO support a shift of the coordinates
     # define target coordinates at the super sampling resolution of the psf
     fov = args.observation_pixel_size * args.observation_pixels
     x = torch.linspace(-1, 1, args.super_sampling_factor*args.observation_pixels).float() * fov / 2
     x, y = torch.meshgrid(x, x, indexing="ij")  # TODO make this coherent with WCS
     # Transform these coordinates into model pixel indices
-    _min = - args.model_pixel_size * (args.model_pixels + args.zero_padding) / 2
-    i_coord = (x - _min) / args.model_pixel_size
-    j_coord = (y - _min) / args.model_pixel_size
+    x_min = args.model_x0 - args.model_pixel_size * (args.model_pixels + args.zero_padding) / 2 # TODO make this coherent with WCS
+    y_min = args.model_y0 - args.model_pixel_size * (args.model_pixels + args.zero_padding) / 2
+    i_coord = (x - x_min) / args.model_pixel_size
+    j_coord = (y - y_min) / args.model_pixel_size
     coordinates = torch.stack([i_coord, j_coord], dim=0).to(DEVICE)
     def A(x):
         x = F.pad(x, pad=[args.zero_padding]*4, mode="constant", value=0.)
@@ -106,7 +113,7 @@ def main(args):
     sigma_min = sde.sigma_min
     sigma_max = sde.sigma_max
     def sigma(t): # scale of the marginal prob. distiribution
-        return sigma_min * (sigma_max / sigma_min)**t
+        return sigma_min * (sigma_max / sigma_min)**t.view(-1, 1, 1, 1)
     def g(t): # diffusion coefficient of the VESDE
         return sigma(t) * np.sqrt(2 * (np.log(sigma_max) - np.log(sigma_min)))
 
@@ -198,17 +205,17 @@ def main(args):
             with torch.no_grad(): # important to add this context, otherwise Pytorch construct a graph through the sampling procedure.
                 # TODO add the possibly of conditioning on a user defined guess, and a user specified "high temperature regime"
                 #  x = guess + torch.randn(args.B, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(args.T)
-                x = torch.randn(args.B, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(1.) # TODO add channels
                 dt = -1. / args.N
                 t = torch.ones(args.B).to(DEVICE)
+                x = torch.randn(args.B, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(t) # TODO add channels
                 for _ in tqdm(range(args.N)):
                     x_mean, x, t = euler_maruyama_step(x, t, dt)
             hf["model"][n * args.B: (n+1) * args.B] = x_mean.cpu().numpy().astype(np.float32)
         # Do the last batch if there is one
         if args.W % args.B > 0:
             with torch.no_grad():
-                x = torch.randn(args.W % args.B, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(1.)  # TODO add channels
                 t = torch.ones(args.B).to(DEVICE)
+                x = torch.randn(args.W % args.B, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(t)  # TODO add channels
                 for _ in tqdm(range(args.N)):
                     x_mean, x, t = euler_maruyama_step(x, t, dt)
             hf["model"][(n+1) * args.B:] = x_mean.cpu().numpy().astype(np.float32)

@@ -1,9 +1,10 @@
 from score_models import DDPM, NCSNpp
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from definitions import preprocessing
+from definitions import preprocessing, linear_preprocessing
 from datetime import datetime
 from tqdm import tqdm
+from torch.nn.functional import avg_pool2d
 import time
 import json
 import numpy as np
@@ -52,6 +53,7 @@ def main(args):
         raise ValueError
 
     hyperparameters["dynamic_range"] = args.dynamic_range
+    hyperparameters["linear_preprocessing"] = args.linear_preprocessing
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     ema = ExponentialMovingAverage(model.parameters(), decay=args.ema_decay)
    
@@ -134,8 +136,13 @@ def main(args):
         cost = 0
         for batch, x in enumerate(dataset):
             start = time.time()
+            if args.downsample > 0:
+                x = avg_pool2d(x, kernel_size=2*args.downsample, stride=2*args.downsample)
             # preprocessing
-            x = preprocessing(x, dynamic_range=args.dynamic_range)
+            if args.linear_preprocessing:
+                x = linear_preprocessing(x)
+            else:
+                x = preprocessing(x, dynamic_range=args.dynamic_range)
             # optimize network
             optimizer.zero_grad()
             loss = loss_fn(x)
@@ -225,6 +232,7 @@ if __name__ == '__main__':
     parser.add_argument("--model_id",           default="none",                     help="The script will search in provided model_dir argument for model_id and load checkpoint if it exists.")
     parser.add_argument("--model_checkpoint",   default=None,       type=int,       help="Index of the checkpoint to load.")
     parser.add_argument("--dynamic_range",		default=1e5,		type=float)
+    parser.add_argument("--linear_preprocessing", action="store_true",              help="Diffusion happens in physical flux units space, with units 10 micro Jy / as^2")
 
     # Model parameters
     parser.add_argument("--model_parameters",               required=True,                  help="Path to model parameter json file.")
@@ -242,7 +250,7 @@ if __name__ == '__main__':
 
     # Training set params
     parser.add_argument("--batch_size",             default=1,      type=int,       help="Number of images in a batch.")
-
+    parser.add_argument("--downsample",             default=0,   type=int,       help="Average pooling, if zero, no downsampling, if 1, then downsample by a factor of 2, etc. ")
     # logs
     parser.add_argument("--logdir",             default="None",                     help="Path of logs directory. Default if None, no logs recorded.")
     parser.add_argument("--logname",            default=None,                       help="Overwrite name of the log with this argument")
