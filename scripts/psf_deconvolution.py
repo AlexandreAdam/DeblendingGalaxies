@@ -9,10 +9,8 @@ import json
 import numpy as np
 import torch
 import os
-from glob import glob
 from astropy.io import fits
 import h5py
-import re
 from tqdm import tqdm
 
 

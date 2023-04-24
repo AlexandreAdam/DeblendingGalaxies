@@ -12,7 +12,7 @@ python $DEBLENDER/scripts/train_slic_with_psf.py\
   --loss=dsm\
   --model_architecture=ncsnpp\
   --dataset_path=$HOME/projects/rrg-lplevass/data/hst_cutouts_noclip.npy\
-  --model_parameters=$DEBLENDER/scripts/train_slic/ncsnpp_hst_noise.json\
+  --model_parameters=$DEBLENDER/scripts/psf_deconvolution/ncsnpp_hst_noise.json\
   --epochs=10000\
   --learning_rate=5e-5\
   --max_time=70\
