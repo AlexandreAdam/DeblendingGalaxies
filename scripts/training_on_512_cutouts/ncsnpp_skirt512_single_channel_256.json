@@ -18,5 +18,5 @@
   "dropout": 0,
   "attention": false,
   "sigma_min": 1e-4,
-  "sigma_max": 300,
+  "sigma_max": 300
 }

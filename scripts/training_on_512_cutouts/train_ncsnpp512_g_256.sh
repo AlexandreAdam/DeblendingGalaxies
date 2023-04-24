@@ -5,7 +5,7 @@
 #SBATCH --mem=32G			     # memory per node
 #SBATCH --time=02-23:00		# time (DD-HH:MM)
 #SBATCH --account=rrg-lplevass
-#SBATCH --job-name=Train_SKIRT512_g
+#SBATCH --job-name=Train_SKIRT256_g
 #SBATCH --output=%x-%j.out
 source $HOME/environments/scope/bin/activate
 python $DEBLENDER/scripts/train_score_model.py\
