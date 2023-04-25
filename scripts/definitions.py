@@ -7,6 +7,13 @@ LOG10 = np.log(10.)
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
+def adu_to_electron_count(img, gain, exposure_time):
+    """
+    A small remainder on how to convert ADE to electron / sec units
+    """
+    return gain * img / exposure_time
+
+
 # The following conversion are wrt to the 3631 Jy zero point
 def ab_mag_to_jansky_per_arcsec_squared(img):
     return 10**(-(img - 8.9) / 2.5)
