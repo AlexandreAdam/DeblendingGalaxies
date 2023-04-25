@@ -19,7 +19,7 @@ python $DEBLENDER/scripts/train_score_model.py\
   --max_time=70\
   --batch_size=8\
   --logdir=$DEBLENDER/logs/\
-  --logname_prefixe=ncsnpp_skirt_g_larger\
+  --logname_prefixe=ncsnpp_skirt_g_larger_linear\
   --model_dir=$DEBLENDER/models/\
   --checkpoints=10\
   --seed=42\
