@@ -5,7 +5,6 @@ from astropy.cosmology import FlatLambdaCDM
 import astropy.units as u
 from torchvision.transforms import CenterCrop
 from definitions import interpolate, DEVICE, load_model, linear_preprocessing
-import json
 import numpy as np
 import torch
 import os
@@ -129,6 +128,8 @@ def main(args):
             reference_profile = torch.tensor(hf[args.dataset_key][args.dataset_id, ..., args.dataset_channels]).to(DEVICE)[None]
         if args.dataset_channels_last:
             reference_profile = torch.permute(reference_profile, (0, 3, 1, 2))  # put channels first
+        if args.downsample > 0:
+            reference_profile = torch.nn.functional.avg_pool2d(reference_profile, kernel_size=2 * args.downsample, stride=2 * args.downsample)
         reference_profile = linear_preprocessing(reference_profile)
         observation = forward_model(reference_profile)
         if args.slic_likelihood:
@@ -250,6 +251,7 @@ if __name__ == '__main__':
     parser.add_argument("--noise_rms",          default=0.01,   type=float,         help="White noise standard deviation added to the fake observation. If SLIC is provided, "
                                                                                          "a noise realisation from the SLIC model is used instead. ")
     parser.add_argument("--super_sampling_factor", default=2,   type=int,           help="Factor by which the PSF is super sampled. ")
+    parser.add_argument("--downsample",             default=0,      type=int,           help="An argument used to make sure reference profile size match prior")
 
     # Which likelihood approximation to use?
     parser.add_argument("--diagonal_gaussian_likelihood", action="store_true",      help="Use the diagonal gaussian likelihood approximation")
