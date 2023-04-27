@@ -22,6 +22,12 @@ N_WORKERS = int(os.getenv('SLURM_ARRAY_TASK_COUNT', 1))
 THIS_WORKER = int(os.getenv('SLURM_ARRAY_TASK_ID', 1))
 
 
+def preprocess_probes_g_channel(img):  # channel 0
+    img = torch.clamp(img, 0, 1.48)
+    img = 2 * img / 1.48 - 1.
+    return img
+
+
 def rad_to_arcsec(theta):
     return theta * 180 / np.pi * 3600
 
@@ -66,7 +72,7 @@ def make_forward_model(args, psf):
     psf = torch.tensor(psf).to(DEVICE).view(C, 1, H, W) # reshape to a convolution kernel [channel_out, channels_in/groups, H, W]
     batched_interpolation = vmap(interpolate, in_dims=(0, None))  # only batch over the images
 
-    # TODO support a shift of the ccordinates
+    # TODO support a shift of the coordinates
     # define target coordinates at the super sampling resolution of the psf
     fov = args.observation_pixel_size * args.observation_pixels
     x = torch.linspace(-1, 1, args.super_sampling_factor*args.observation_pixels).float() * fov / 2
@@ -130,7 +136,10 @@ def main(args):
             reference_profile = torch.permute(reference_profile, (0, 3, 1, 2))  # put channels first
         if args.downsample > 0:
             reference_profile = torch.nn.functional.avg_pool2d(reference_profile, kernel_size=2 * args.downsample, stride=2 * args.downsample)
-        reference_profile = linear_preprocessing(reference_profile)
+        if args.probes:
+            reference_profile = preprocess_probes_g_channel(reference_profile)
+        else:
+            reference_profile = linear_preprocessing(reference_profile)
         observation = forward_model(reference_profile)
         if args.slic_likelihood:
             print(f"Using noise map {args.noise_map} | id = {args.noise_index}")
@@ -238,6 +247,7 @@ if __name__ == '__main__':
     parser.add_argument("--injection_test",    action="store_true",                 help="Injection test mode will require an hdf5 file for the reference "
                                                                                          "profile to be recovered, the key in the hdf5 and the index of the profile. "
                                                                                          "Also requires a fits file for the PSF")
+    parser.add_argument("--probes",             action="store_true",                help="Whether to use probes, this is a bit of a hack")
     parser.add_argument("--dataset_path",      default=None,                        help="Path to the h5 files with reference profiles for the injection test")
     parser.add_argument("--dataset_key",       default="images",                    help="Key to the reference profile in the dataset")
     parser.add_argument("--dataset_id",        default=None,    type=int,           help="Index for the reference profile to recover")
