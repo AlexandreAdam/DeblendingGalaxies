@@ -244,6 +244,7 @@ if __name__ == '__main__':
     parser.add_argument("--observation_pixels", default=128,    type=int,           help="Make a fake observation with this number of pixels on a side")
     parser.add_argument("--observation_pixel_size", default=0.05, type=float,       help="Pixel size for the fake observation, in arcseconds")
     parser.add_argument("--model_pixels",       default=512,     type=int,          help="Number of pixels on a side for the model")
+    parser.add_argument("--model_pixel_size",   default=0.01,    type=float,        help="Pixel size for the model")
     parser.add_argument("--zero_padding",       default=0,      type=int,           help="Zero padding in the forward model. Default is no zero-padding")
     parser.add_argument("--noise_rms",          default=0.01,   type=float,         help="White noise standard deviation added to the fake observation. If SLIC is provided, "
                                                                                          "a noise realisation from the SLIC model is used instead. ")
