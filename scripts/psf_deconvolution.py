@@ -4,7 +4,7 @@ from torch.nn import functional as F
 from astropy.cosmology import FlatLambdaCDM
 import astropy.units as u
 from torchvision.transforms import CenterCrop
-from definitions import interpolate, DEVICE, load_model, ab_mag_to_jansky_per_arcsec_squared
+from definitions import interpolate, DEVICE, load_model, linear_preprocessing
 import json
 import numpy as np
 import torch
@@ -129,6 +129,7 @@ def main(args):
             reference_profile = torch.tensor(hf[args.dataset_key][args.dataset_id, ..., args.dataset_channels]).to(DEVICE)[None]
         if args.dataset_channels_last:
             reference_profile = torch.permute(reference_profile, (0, 3, 1, 2))  # put channels first
+        reference_profile = linear_preprocessing(reference_profile)
         observation = forward_model(reference_profile)
         if args.slic_likelihood:
             print(f"Using noise map {args.noise_map} | id = {args.noise_index}")
@@ -193,22 +194,21 @@ def main(args):
         # TODO support multiple channels
         hf.create_dataset("model", [args.W, 1, args.model_pixels, args.model_pixels], dtype=np.float32)
         hf["model"].attrs["posterior_sample"] = not args.from_prior # make sure we write somewhere if this is a posterior sample or not
-        # TODO renormalize noise to make sure 10^x does not explode, add corresponding drift from Ito's lemma in the SDE
         for n in range(args.W // args.B):
             with torch.no_grad(): # important to add this context, otherwise Pytorch construct a graph through the sampling procedure.
                 # TODO add the possibly of conditioning on a user defined guess, and a user specified "high temperature regime"
                 #  x = guess + torch.randn(args.B, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(args.T)
-                x = torch.randn(args.B, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(1.) # TODO add channels
                 dt = -1. / args.N
                 t = torch.ones(args.B).to(DEVICE)
+                x = torch.randn(args.B, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(t) # TODO add channels
                 for _ in tqdm(range(args.N)):
                     x_mean, x, t = euler_maruyama_step(x, t, dt)
             hf["model"][n * args.B: (n+1) * args.B] = x_mean.cpu().numpy().astype(np.float32)
         # Do the last batch if there is one
         if args.W % args.B > 0:
             with torch.no_grad():
-                x = torch.randn(args.W % args.B, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(1.)  # TODO add channels
                 t = torch.ones(args.B).to(DEVICE)
+                x = torch.randn(args.W % args.B, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(t)  # TODO add channels
                 for _ in tqdm(range(args.N)):
                     x_mean, x, t = euler_maruyama_step(x, t, dt)
             hf["model"][(n+1) * args.B:] = x_mean.cpu().numpy().astype(np.float32)

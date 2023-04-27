@@ -10,7 +10,7 @@
 #SBATCH --output=%x-%j.out
 source $HOME/environments/scope/bin/activate
 python $DEBLENDER/scripts/psf_deconvolution.py\
-  --experiment_name=skirt_g_hst_mock_psf_deconvolution\
+  --experiment_name=skirt_g_hst_mock_psf_deconvolution_468\
   --psf_fits=$DEBLENDER/data/F814w_WFC3UV_cropped_psf.fits\
   --psf_key=PRIMARY\
   --injection_test\
@@ -23,11 +23,11 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --observation_pixel_size=0.04\
   --model_pixels=256\
   --model_pixel_size=0.02\
-  --noise_rms=1e-1\
+  --noise_rms=2e-2\
   --super_sampling_factor=4\
   --diagonal_gaussian_likelihood\
   --result_dir=$DEBLENDER/results/\
-  --checkpoints_dir=$DEBLENDER/ncsnpp_skirt_g_256_linear_230425023555\
+  --checkpoints_dir=$DEBLENDER/models/ncsnpp_skirt_g_256_linear_230425023555\
   -N=4000\
   -W=30\
   -B=10\
