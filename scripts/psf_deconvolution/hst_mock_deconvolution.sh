@@ -17,7 +17,7 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --dataset_path=/home/aadam/scratch/skirt512_grizy.h5\
   --dataset_channels 0\
   --dataset_key=images\
-  --dataset_id=42\
+  --dataset_id=468\
   --dataset_channels_last\
   --observation_pixels=128\
   --observation_pixel_size=0.04\
