@@ -17,17 +17,17 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --dataset_path=/home/aadam/scratch/skirt512_grizy.h5\
   --dataset_channels 0\
   --dataset_key=images\
+  --dataset_id=42\
   --dataset_channels_last\
   --observation_pixels=128\
   --observation_pixel_size=0.04\
-  --model_pixels=512\
-  --model_pixel_size=0.01\
-  --noise_rms=1e-1\
+  --model_pixels=256\
+  --model_pixel_size=0.02\
   --super_sampling_factor=4\
   --slic_likelihood\
   --slic_model=ncsnpp_hst_noise_psf_f814w_wfc3uv_230421041030\
   --result_dir=$DEBLENDER/results/\
-  --checkpoints_dir=$DEBLENDER/ncsnpp_skirt_g_larger_230421030814/\
-  -N=8000\
+  --checkpoints_dir=$DEBLENDER/ncsnpp_skirt_g_256_linear_230425023555\
+  -N=4000\
   -W=30\
   -B=10\

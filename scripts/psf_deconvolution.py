@@ -106,7 +106,7 @@ def main(args):
     sigma_min = sde.sigma_min
     sigma_max = sde.sigma_max
     def sigma(t): # scale of the marginal prob. distiribution
-        return sigma_min * (sigma_max / sigma_min)**t
+        return sigma_min * (sigma_max / sigma_min)**t.view(-1, 1, 1, 1)
     def g(t): # diffusion coefficient of the VESDE
         return sigma(t) * np.sqrt(2 * (np.log(sigma_max) - np.log(sigma_min)))
 
@@ -126,7 +126,7 @@ def main(args):
 
     if args.injection_test:
         with h5py.File(args.dataset_path, "r") as hf:
-            reference_profile = torch.tensor(hf[args.dataset_key, ..., args.dataset_channels][args.dataset_id]).to(DEVICE)[None]
+            reference_profile = torch.tensor(hf[args.dataset_key][args.dataset_id, ..., args.dataset_channels]).to(DEVICE)[None]
         if args.dataset_channels_last:
             reference_profile = torch.permute(reference_profile, (0, 3, 1, 2))  # put channels first
         observation = forward_model(reference_profile)
@@ -144,7 +144,7 @@ def main(args):
 
     if args.diagonal_gaussian_likelihood:
         def convolved_likelihood(x, t, sigma_n=args.noise_rms):
-            var = (sigma_n**2 + sigma(t)**2).view(*[1]*len(observation.shape))
+            var = sigma_n**2 + sigma(t)**2
             y_hat = forward_model(x[None])
             ll = torch.sum(-0.5 * torch.square(observation - y_hat) / var)
             return ll
@@ -162,13 +162,13 @@ def main(args):
     if args.from_prior:
         def score_fn(x, t):
             B, *D = x.shape
-            prior_score = prior_model(x, t) / sigma(t).view(B, *[1]*len(D))
+            prior_score = prior_model(x, t) / sigma(t)
             return prior_score
     else:
         # Sample from the posterior
         def score_fn(x, t):
             B, *D = x.shape
-            prior_score = prior_model(x, t) / sigma(t).view(B, *[1]*len(D))
+            prior_score = prior_model(x, t) / sigma(t)
             likelihood_score = convolved_likelihood_gradient(x, t)
             return prior_score + likelihood_score
 
