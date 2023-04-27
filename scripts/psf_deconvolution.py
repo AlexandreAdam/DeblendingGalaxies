@@ -4,7 +4,7 @@ from torch.nn import functional as F
 from astropy.cosmology import FlatLambdaCDM
 import astropy.units as u
 from torchvision.transforms import CenterCrop
-from definitions import interpolate, DEVICE, load_model, ab_mag_to_jansky_per_arcsec_squared
+from definitions import interpolate, DEVICE, load_model, linear_preprocessing
 import json
 import numpy as np
 import torch
@@ -100,13 +100,13 @@ def main(args):
         print(f"Model has pixel size {args.model_pixel_size} as and field of view {args.model_pixel_size * args.model_pixels} as")
 
     # Load model
-    prior_model = load_model(args.checkpoint, architecture=NCSNpp, data_parallel=True, model_checkpoint=args.model_checkpoint)
+    prior_model = load_model(args.checkpoints_dir, architecture=NCSNpp, data_parallel=True, model_checkpoint=args.model_checkpoint)
     # Hack the VESDE in the model for readability
     sde = prior_model.module.sde # .module is a hack to
     sigma_min = sde.sigma_min
     sigma_max = sde.sigma_max
     def sigma(t): # scale of the marginal prob. distiribution
-        return sigma_min * (sigma_max / sigma_min)**t
+        return sigma_min * (sigma_max / sigma_min)**t.view(-1, 1, 1, 1)
     def g(t): # diffusion coefficient of the VESDE
         return sigma(t) * np.sqrt(2 * (np.log(sigma_max) - np.log(sigma_min)))
 
@@ -126,9 +126,10 @@ def main(args):
 
     if args.injection_test:
         with h5py.File(args.dataset_path, "r") as hf:
-            reference_profile = torch.tensor(hf[args.dataset_key, ..., args.dataset_channels][args.dataset_id]).to(DEVICE)[None]
+            reference_profile = torch.tensor(hf[args.dataset_key][args.dataset_id, ..., args.dataset_channels]).to(DEVICE)[None]
         if args.dataset_channels_last:
             reference_profile = torch.permute(reference_profile, (0, 3, 1, 2))  # put channels first
+        reference_profile = linear_preprocessing(reference_profile)
         observation = forward_model(reference_profile)
         if args.slic_likelihood:
             print(f"Using noise map {args.noise_map} | id = {args.noise_index}")
@@ -144,7 +145,7 @@ def main(args):
 
     if args.diagonal_gaussian_likelihood:
         def convolved_likelihood(x, t, sigma_n=args.noise_rms):
-            var = (sigma_n**2 + sigma(t)**2).view(*[1]*len(observation.shape))
+            var = sigma_n**2 + sigma(t)**2
             y_hat = forward_model(x[None])
             ll = torch.sum(-0.5 * torch.square(observation - y_hat) / var)
             return ll
@@ -162,13 +163,13 @@ def main(args):
     if args.from_prior:
         def score_fn(x, t):
             B, *D = x.shape
-            prior_score = prior_model(x, t) / sigma(t).view(B, *[1]*len(D))
+            prior_score = prior_model(x, t) / sigma(t)
             return prior_score
     else:
         # Sample from the posterior
         def score_fn(x, t):
             B, *D = x.shape
-            prior_score = prior_model(x, t) / sigma(t).view(B, *[1]*len(D))
+            prior_score = prior_model(x, t) / sigma(t)
             likelihood_score = convolved_likelihood_gradient(x, t)
             return prior_score + likelihood_score
 
@@ -198,17 +199,17 @@ def main(args):
             with torch.no_grad(): # important to add this context, otherwise Pytorch construct a graph through the sampling procedure.
                 # TODO add the possibly of conditioning on a user defined guess, and a user specified "high temperature regime"
                 #  x = guess + torch.randn(args.batch_size, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(args.T)
-                x = torch.randn(args.batch_size, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(1.) # TODO add channels
                 dt = -1. / args.em_iterations
                 t = torch.ones(args.batch_size).to(DEVICE)
+                x = torch.randn(args.batch_size, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(t) # TODO add channels
                 for _ in tqdm(range(args.em_iterations)):
                     x_mean, x, t = euler_maruyama_step(x, t, dt)
             hf["model"][n * args.batch_size: (n+1) * args.batch_size] = x_mean.cpu().numpy().astype(np.float32)
         # Do the last batch if there is one
         if args.walkers % args.batch_size > 0:
             with torch.no_grad():
-                x = torch.randn(args.walkers % args.batch_size, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(1.)  # TODO add channels
                 t = torch.ones(args.batch_size).to(DEVICE)
+                x = torch.randn(args.walkers % args.batch_size, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(t)  # TODO add channels
                 for _ in tqdm(range(args.em_iterations)):
                     x_mean, x, t = euler_maruyama_step(x, t, dt)
             hf["model"][(n+1) * args.batch_size:] = x_mean.cpu().numpy().astype(np.float32)
@@ -223,7 +224,7 @@ if __name__ == '__main__':
     parser.add_argument("-z", "--redshift",     default=None,                      help="Redshift at which to place the model, which has a resolution of 0.1 comoving kpc")
     parser.add_argument("--h0",                 default=0.70,                       help="Hubble constant")
     parser.add_argument("--Om0",                default=0.3,                        help="Matter density parameter")
-    parser.add_argument("--")
+    # parser.add_argument("--")
 
     # REAL DATA MODEL TODO write the code for this mode -> requires handling HST units conversion and possibly others
     # With real data, we only have access to the observation itself and the PSF
@@ -244,6 +245,7 @@ if __name__ == '__main__':
     parser.add_argument("--observation_pixels", default=128,    type=int,           help="Make a fake observation with this number of pixels on a side")
     parser.add_argument("--observation_pixel_size", default=0.05, type=float,       help="Pixel size for the fake observation, in arcseconds")
     parser.add_argument("--model_pixels",       default=512,     type=int,          help="Number of pixels on a side for the model")
+    parser.add_argument("--model_pixel_size",   default=0.01,    type=float,        help="Pixel size for the model")
     parser.add_argument("--zero_padding",       default=0,      type=int,           help="Zero padding in the forward model. Default is no zero-padding")
     parser.add_argument("--noise_rms",          default=0.01,   type=float,         help="White noise standard deviation added to the fake observation. If SLIC is provided, "
                                                                                          "a noise realisation from the SLIC model is used instead. ")

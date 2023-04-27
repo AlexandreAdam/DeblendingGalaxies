@@ -9,7 +9,7 @@ DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def adu_to_electron_count(img, gain, exposure_time):
     """
-    A small remainder on how to convert ADE to electron / sec units
+    A small remainder on how to convert ADU to electron / sec units
     """
     return gain * img / exposure_time
 
