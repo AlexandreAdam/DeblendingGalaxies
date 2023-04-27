@@ -21,13 +21,14 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --dataset_channels_last\
   --observation_pixels=128\
   --observation_pixel_size=0.04\
+  --downsample=1\
   --model_pixels=256\
   --model_pixel_size=0.02\
   --super_sampling_factor=4\
   --slic_likelihood\
-  --slic_model=ncsnpp_hst_noise_psf_f814w_wfc3uv_230421041030\
+  --slic_model=$DEBLENDER/models/ncsnpp_hst_noise_psf_f814w_wfc3uv_230421041030\
   --result_dir=$DEBLENDER/results/\
-  --checkpoints_dir=$DEBLENDER/ncsnpp_skirt_g_256_linear_230425023555\
+  --checkpoints_dir=$DEBLENDER/models/ncsnpp_skirt_g_256_linear_230425023555\
   -N=4000\
   -W=30\
   -B=10\
