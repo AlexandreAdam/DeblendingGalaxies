@@ -203,8 +203,8 @@ def main(args):
         hf["psf"] = psf.astype(np.float32).squeeze()
         # TODO support multiple channels
         hf.create_dataset("model", [args.walkers, 1, args.model_pixels, args.model_pixels], dtype=np.float32)
+        hf.create_dataset("reconstruction", [args.walkers, 1, args.observation_pixels, args.observation_pixels], dtype=np.float32)
         hf["model"].attrs["posterior_sample"] = not args.from_prior # make sure we write somewhere if this is a posterior sample or not
-        # TODO renormalize noise to make sure 10^x does not explode, add corresponding drift from Ito's lemma in the SDE
         for n in range(args.walkers // args.batch_size):
             with torch.no_grad(): # important to add this context, otherwise Pytorch construct a graph through the sampling procedure.
                 # TODO add the possibly of conditioning on a user defined guess, and a user specified "high temperature regime"
@@ -215,6 +215,8 @@ def main(args):
                 for _ in tqdm(range(args.em_iterations)):
                     x_mean, x, t = euler_maruyama_step(x, t, dt)
             hf["model"][n * args.batch_size: (n+1) * args.batch_size] = x_mean.cpu().numpy().astype(np.float32)
+            hf["reconstruction"][n * args.batch_size: (n+1) * args.batch_size] = forward_model(x_mean).cpu().numpy().astype(np.float32)
+
         # Do the last batch if there is one
         if args.walkers % args.batch_size > 0:
             with torch.no_grad():
@@ -223,6 +225,7 @@ def main(args):
                 for _ in tqdm(range(args.em_iterations)):
                     x_mean, x, t = euler_maruyama_step(x, t, dt)
             hf["model"][(n+1) * args.batch_size:] = x_mean.cpu().numpy().astype(np.float32)
+            hf["reconstruction"][(n+1) * args.batch_size:] = forward_model(x_mean).cpu().numpy().astype(np.float32)
 
 
 if __name__ == '__main__':

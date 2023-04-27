@@ -20,10 +20,10 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --dataset_key=galaxies\
   --dataset_id=115\
   --dataset_channels_last\
-  --observation_pixels=128\
+  --observation_pixels=64\
   --observation_pixel_size=0.04\
   --model_pixels=256\
-  --model_pixel_size=0.02\
+  --model_pixel_size=0.01\
   --noise_rms=2e-2\
   --super_sampling_factor=4\
   --diagonal_gaussian_likelihood \
