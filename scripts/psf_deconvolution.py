@@ -223,7 +223,7 @@ if __name__ == '__main__':
     parser.add_argument("-z", "--redshift",     default=None,                      help="Redshift at which to place the model, which has a resolution of 0.1 comoving kpc")
     parser.add_argument("--h0",                 default=0.70,                       help="Hubble constant")
     parser.add_argument("--Om0",                default=0.3,                        help="Matter density parameter")
-    parser.add_argument("--")
+    # parser.add_argument("--")
 
     # REAL DATA MODEL TODO write the code for this mode -> requires handling HST units conversion and possibly others
     # With real data, we only have access to the observation itself and the PSF
