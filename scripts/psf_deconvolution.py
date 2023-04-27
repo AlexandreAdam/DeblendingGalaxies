@@ -191,27 +191,27 @@ def main(args):
         # hf["observation"].attrs["pixel_size"] = 'micro Jy'
         hf["psf"] = psf.astype(np.float32).squeeze()
         # TODO support multiple channels
-        hf.create_dataset("model", [args.W, 1, args.model_pixels, args.model_pixels], dtype=np.float32)
+        hf.create_dataset("model", [args.walkers, 1, args.model_pixels, args.model_pixels], dtype=np.float32)
         hf["model"].attrs["posterior_sample"] = not args.from_prior # make sure we write somewhere if this is a posterior sample or not
         # TODO renormalize noise to make sure 10^x does not explode, add corresponding drift from Ito's lemma in the SDE
-        for n in range(args.W // args.B):
+        for n in range(args.walkers // args.batch_size):
             with torch.no_grad(): # important to add this context, otherwise Pytorch construct a graph through the sampling procedure.
                 # TODO add the possibly of conditioning on a user defined guess, and a user specified "high temperature regime"
-                #  x = guess + torch.randn(args.B, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(args.T)
-                x = torch.randn(args.B, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(1.) # TODO add channels
-                dt = -1. / args.N
-                t = torch.ones(args.B).to(DEVICE)
-                for _ in tqdm(range(args.N)):
+                #  x = guess + torch.randn(args.batch_size, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(args.T)
+                x = torch.randn(args.batch_size, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(1.) # TODO add channels
+                dt = -1. / args.em_iterations
+                t = torch.ones(args.batch_size).to(DEVICE)
+                for _ in tqdm(range(args.em_iterations)):
                     x_mean, x, t = euler_maruyama_step(x, t, dt)
-            hf["model"][n * args.B: (n+1) * args.B] = x_mean.cpu().numpy().astype(np.float32)
+            hf["model"][n * args.batch_size: (n+1) * args.batch_size] = x_mean.cpu().numpy().astype(np.float32)
         # Do the last batch if there is one
-        if args.W % args.B > 0:
+        if args.walkers % args.batch_size > 0:
             with torch.no_grad():
-                x = torch.randn(args.W % args.B, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(1.)  # TODO add channels
-                t = torch.ones(args.B).to(DEVICE)
-                for _ in tqdm(range(args.N)):
+                x = torch.randn(args.walkers % args.batch_size, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(1.)  # TODO add channels
+                t = torch.ones(args.batch_size).to(DEVICE)
+                for _ in tqdm(range(args.em_iterations)):
                     x_mean, x, t = euler_maruyama_step(x, t, dt)
-            hf["model"][(n+1) * args.B:] = x_mean.cpu().numpy().astype(np.float32)
+            hf["model"][(n+1) * args.batch_size:] = x_mean.cpu().numpy().astype(np.float32)
 
 
 if __name__ == '__main__':
