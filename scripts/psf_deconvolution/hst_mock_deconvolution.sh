@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=1 # maximum cpu per task is 3.5 per gpus
 #SBATCH --gres=gpu:1
 #SBATCH --mem=32G			 # memory per node
-#SBATCH --time=00-05:00		# time (DD-HH:MM)
+#SBATCH --time=00-02:00		# time (DD-HH:MM)
 #SBATCH --account=rrg-lplevass
 #SBATCH --job-name=Deconvolution
 #SBATCH --output=%x-%j.out
@@ -26,7 +26,7 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --model_pixel_size=0.02\
   --noise_rms=2e-2\
   --super_sampling_factor=4\
-  --diagonal_gaussian_likelihood\
+  --diagonal_gaussian_likelihood \
   --result_dir=$DEBLENDER/results/\
   --checkpoints_dir=$DEBLENDER/models/ncsnpp_skirt_g_256_linear_230425023555\
   -N=4000\
