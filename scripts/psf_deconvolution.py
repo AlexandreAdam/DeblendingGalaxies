@@ -100,7 +100,7 @@ def main(args):
         print(f"Model has pixel size {args.model_pixel_size} as and field of view {args.model_pixel_size * args.model_pixels} as")
 
     # Load model
-    prior_model = load_model(args.checkpoint, architecture=NCSNpp, data_parallel=True, model_checkpoint=args.model_checkpoint)
+    prior_model = load_model(args.checkpoints_dir, architecture=NCSNpp, data_parallel=True, model_checkpoint=args.model_checkpoint)
     # Hack the VESDE in the model for readability
     sde = prior_model.module.sde # .module is a hack to
     sigma_min = sde.sigma_min
