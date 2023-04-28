@@ -4,13 +4,13 @@
 #SBATCH --cpus-per-task=1 # maximum cpu per task is 3.5 per gpus
 #SBATCH --gres=gpu:1
 #SBATCH --mem=32G			 # memory per node
-#SBATCH --time=00-02:00		# time (DD-HH:MM)
+#SBATCH --time=00-05:00		# time (DD-HH:MM)
 #SBATCH --account=rrg-lplevass
 #SBATCH --job-name=Deconvolution
 #SBATCH --output=%x-%j.out
 source $HOME/environments/scope/bin/activate
 python $DEBLENDER/scripts/psf_deconvolution.py\
-  --experiment_name=probes_g_hst_mock_psf_deconvolution_115\
+  --experiment_name=probes_g_hst_mock_psf_deconvolution_115_wslic\
   --psf_fits=$DEBLENDER/data/F814w_WFC3UV_cropped_psf.fits\
   --psf_key=PRIMARY\
   --injection_test\
@@ -22,11 +22,12 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --dataset_channels_last\
   --observation_pixels=128\
   --observation_pixel_size=0.04\
+  --downsample=1\
   --model_pixels=256\
   --model_pixel_size=0.02\
-  --noise_rms=2e-2\
   --super_sampling_factor=4\
-  --diagonal_gaussian_likelihood \
+  --slic_likelihood\
+  --slic_model=$DEBLENDER/models/ncsnpp_hst_noise_psf_f814w_wfc3uv_230424101121\
   --result_dir=$DEBLENDER/results/\
   --checkpoints_dir=$HOME/projects/rrg-lplevass/data/score_models/ncsnpp_ct_g_220912024942\
   -N=4000\
