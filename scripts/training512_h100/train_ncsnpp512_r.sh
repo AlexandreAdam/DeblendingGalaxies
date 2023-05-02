@@ -13,16 +13,16 @@ python $DEBLENDER/scripts/train_score_model.py\
   --dataset_path=/home/aadam/scratch/skirt512_grizy.h5\
   --dataset_channels 1\
   --dataset_key=images\
-  --model_parameters=$DEBLENDER/scripts/training_on_512_cutouts/ncsnpp_skirt512_single_channel.json\
+  --model_parameters=$DEBLENDER/scripts/training512_h100/ncsnpp_skirt512_single_channel.json\
   --epochs=10000\
   --learning_rate=2e-5\
   --max_time=70\
-  --batch_size=8\
+  --batch_size=64\
   --logdir=$DEBLENDER/logs/\
   --logname_prefixe=ncsnpp_skirt_r\
   --model_dir=$DEBLENDER/models/\
-  --checkpoints=10\
+  --checkpoints=3\
   --seed=42\
-  --dynamic_range=1e5\
-  --epoch_iterations=1000
+  --epoch_iterations=1000\
+  --linear_preprocessing
 
