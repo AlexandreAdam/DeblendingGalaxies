@@ -17,6 +17,6 @@
   "num_res_blocks": 2,
   "dropout": 0,
   "attention": false,
-  "sigma_min": 1e-5,
-  "sigma_max": 1500
+  "sigma_min": 1e-6,
+  "sigma_max": 3000
 }
