@@ -55,6 +55,18 @@ def preprocessing(img, dynamic_range=1e5):
     return torch.log(1e6 * img + 1/dynamic_range) / np.log(10.) + np.log10(dynamic_range)
 
 
+def preprocessing_nonlinear_sde(img, minimum_flux=1e-3):
+    """
+    We want the diffusion to happen in log space so that generated images
+    strictly have positive flux.
+
+    We use 10 micro Jansky / arcsec^2 units instead of AB mag.
+
+    minimum_flux: Sets the minimum flux value we consider, in 10 micor Jy / as^2 units.
+    """
+    img = ab_mag_to_jansky_per_arcsec_squared(img)
+    return 10**(torch.log(1e5 * img + minimum_flux) / np.log(10.))
+
 def linear_preprocessing(img):
     """
     For usage in inverse problem, we need the processing to be linear. For that reason,

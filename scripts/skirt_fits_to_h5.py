@@ -5,6 +5,7 @@ from astropy.io import fits
 from tqdm import tqdm
 import numpy as np
 
+
 def main(args):
     files = []
     for directory in tqdm(os.listdir(args.skirt_path)):
@@ -12,7 +13,7 @@ def main(args):
             files.append(f)
     with h5py.File(args.output_path, "w") as hf:
         dt = h5py.string_dtype(encoding='utf-8') # allows storing variable length strings
-        hf.create_dataset("images", [len(files), args.size, args.size, len(args.filters)], dtype=np.float32)
+        hf.create_dataset("images", [len(files), len(args.filters), args.size, args.size], dtype=np.float32, chunks=(1, 1, 512, 512))
         hf["images"].attrs["units"] = 'AB mag/arcsec2'
         for i, _filter in enumerate(args.filters):
             hf["images"].attrs[f"channel_{i}"] = _filter
@@ -55,13 +56,13 @@ def main(args):
                 right_crop = left_crop + ((total_size - args.size) % 2)
                 for j, _filter in enumerate(args.filters):
                     image = data[_filter].data
-                    hf["images"][i, :, :, j] = image[left_crop:total_size - right_crop, left_crop:total_size - right_crop]
+                    hf["images"][i, j] = image[left_crop:total_size - right_crop, left_crop:total_size - right_crop],
             else:
                 left_pad = (args.size - total_size) // 2
                 right_pad = left_pad + ((args.size - total_size) % 2)
                 for j, _filter in enumerate(args.filters):
                     image = data[_filter].data
-                    hf["images"][i, :, :, j] = np.pad(image, [[left_pad, right_pad]]*2, mode="constant", constant_values=99)
+                    hf["images"][i, j] = np.pad(image, [[left_pad, right_pad]]*2, mode="constant", constant_values=99),
             hf["SIMTAG"][i] = hdr["SIMTAG"]
             hf["SNAPNUM"][i] = hdr["SNAPNUM"]
             hf["SUBHALO"][i] = hdr["SUBHALO"]
@@ -72,7 +73,6 @@ def main(args):
             hf["CDELT1"][i] = hdr["CDELT1"]
             hf["CDELT2"][i] = hdr["CDELT2"]
             hf["filename"][i] = filename
-
 
 
 if __name__ == "__main__":

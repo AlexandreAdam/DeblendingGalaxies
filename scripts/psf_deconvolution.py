@@ -116,8 +116,16 @@ def main(args):
         return sigma(t) * np.sqrt(2 * (np.log(sigma_max) - np.log(sigma_min)))
 
     if args.real_data:
-        # Would load the data and overwrite the argument name space with fits header values
-        raise NotImplementedError("Real data mode not yet supported")
+        data = fits.open(args.observation_fits)
+        assert data[args.observation_key].header["CUNIT1"] == "deg"
+        assert data[args.observation_key].header["CUNIT2"] == "deg"
+        pixel_size = np.sqrt(data[args.observation_key].header["CD1_1"] ** 2 + data[args.observation_key].header["CD1_2"] ** 2) * 3600
+        assert len(data[args.observation_key].data.shape) == 2
+        assert data[args.observation_key].data.shape[0] == data[args.observation_key].data.shape[1]
+        pixels = data[args.observation_key].data.shape[0]
+        observation = torch.tensor(data[args.observation_key].data[None].astype(np.float32)).to(DEVICE)
+        vars(args)["observation_pixel_size"] = pixel_size
+        vars(args)["observation_pixels"] = pixels
 
     if args.slic_likelihood:
         slic_model = load_model(args.slic_model, architecture=NCSNpp, data_parallel=True, model_checkpoint=args.model_checkpoint)
@@ -245,7 +253,8 @@ if __name__ == '__main__':
                                                                                          "fits file for the observation and a fits file for the PSF. "
                                                                                          "Note that this mode overwrite arguments related to a fake "
                                                                                          "observation, used in the injection test mode, with the content of the fits header.")
-    parser.add_argument("--observation_fits",  default=None,                        help="Path to observation fits file")
+    parser.add_argument("--observation_fits",   default=None,                        help="Path to observation fits file")
+    parser.add_argument("--observation_key",    default=None,                        help="Key to observation in fits file")
 
     parser.add_argument("--injection_test",    action="store_true",                 help="Injection test mode will require an hdf5 file for the reference "
                                                                                          "profile to be recovered, the key in the hdf5 and the index of the profile. "
