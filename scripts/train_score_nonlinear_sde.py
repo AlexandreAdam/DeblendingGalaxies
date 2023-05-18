@@ -77,7 +77,8 @@ def main(args):
     with open(args.model_parameters, "r") as f:
         hyperparameters = json.load(f)
     if args.model_architecture.lower() == "ncsnpplog":
-        model = torch.nn.DataParallel(NCSNppLog(**hyperparameters).to(DEVICE), device_ids=list(range(torch.cuda.device_count())))
+        # Cannot use DataParallel for this script, because of functorch VJP
+        model = NCSNppLog(**hyperparameters).to(DEVICE)
     else:
         raise ValueError
 
@@ -90,10 +91,10 @@ def main(args):
         broadcast = [-1, *[1] * len(D)]  # used to broadcast scalars to image shape
         z = torch.randn_like(x)
         t = torch.rand(B).to(DEVICE)
-        x_log = torch.log(x + model.module.beta0 + model.module.beta1 * t.view(*broadcast) + z * model.module.sde.sigma(t).view(*broadcast))
-        x_log_detrended = x_log - torch.log(model.module.beta0 + model.module.beta1 * t.view(*broadcast))
+        x_log = torch.log(x + model.beta0 + model.beta1 * t.view(*broadcast) + z * model.sde.sigma(t).view(*broadcast))
+        x_log_detrended = x_log - torch.log(model.beta0 + model.beta1 * t.view(*broadcast))
         # We pass x_log_detrended (model input) in the loss, but weight must be computed at detrended value (or x_log)
-        lambda_t = lambda x, t: model.module.sde.sigma(t) ** 2 * torch.exp(-2 * (x + torch.log(model.module.beta0 + model.module.beta1 * t.view(*broadcast))))
+        lambda_t = lambda x, t: model.sde.sigma(t) ** 2 * torch.exp(-2 * (x + torch.log(model.beta0 + model.beta1 * t.view(*broadcast))))
         return sliced_score_matching_loss(
             model=model,
             samples=x_log_detrended,
@@ -137,12 +138,12 @@ def main(args):
         scores = [float(re.findall('([0-9]{1}.[0-9]+e[+-][0-9]{2})', os.path.split(path)[-1])[-1]) for path in paths]
         if args.model_id.lower() != "none" and checkpoints != []:
             if args.model_checkpoint is not None:
-                model.module.load_state_dict(torch.load(paths[checkpoints == args.model_checkpoint], map_location=DEVICE))
+                model.load_state_dict(torch.load(paths[checkpoints == args.model_checkpoint], map_location=DEVICE))
                 optimizer.load_state_dict(torch.load(opt_paths[checkpoints == args.model_checkpoint], map_location=DEVICE))
                 print(f"Loaded checkpoint {args.model_checkpoint} of {args.model_id}")
                 lastest_checkpoint = args.model_checkpoint
             else:
-                model.module.load_state_dict(torch.load(paths[np.argmax(checkpoints)], map_location=DEVICE))
+                model.load_state_dict(torch.load(paths[np.argmax(checkpoints)], map_location=DEVICE))
                 optimizer.load_state_dict(torch.load(opt_paths[np.argmax(checkpoints)], map_location=DEVICE))
                 print(f"Loaded checkpoint {max(checkpoints)} of {args.model_id}")
                 lastest_checkpoint = max(checkpoints)
@@ -226,8 +227,7 @@ def main(args):
                 with open(os.path.join(checkpoints_dir, "score_sheet.txt"), mode="a") as f:
                     f.write(f"{lastest_checkpoint} {cost}\n")
                 with ema.average_parameters():  # save EMA parameters
-                    # Use model.module to get the state dict from within the data parallel module
-                    torch.save(model.module.state_dict(), os.path.join(checkpoints_dir, f"checkpoint_{cost:.4e}_{lastest_checkpoint:03d}.pt"))
+                    torch.save(model.state_dict(), os.path.join(checkpoints_dir, f"checkpoint_{cost:.4e}_{lastest_checkpoint:03d}.pt"))
                 torch.save(optimizer.state_dict(), os.path.join(checkpoints_dir, f"optimizer_{cost:.4e}_{lastest_checkpoint:03d}.pt"))
                 checkpoints.append(lastest_checkpoint)
                 scores.append(cost)
