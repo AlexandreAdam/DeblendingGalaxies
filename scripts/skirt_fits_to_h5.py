@@ -4,6 +4,38 @@ from glob import glob
 from astropy.io import fits
 from tqdm import tqdm
 import numpy as np
+from numpy.lib.stride_tricks import as_strided
+
+
+def pool2d(A, kernel_size, stride, padding=0, pool_mode='max'):
+    '''
+     2D Pooling
+
+     Parameters:
+         A: input 2D array
+         kernel_size: int, the size of the window over which we take pool
+         stride: int, the stride of the window
+         padding: int, implicit zero paddings on both sides of the input
+         pool_mode: string, 'max' or 'avg'
+     '''
+    # Padding
+    A = np.pad(A, padding, mode='constant')
+
+    # Window view of A
+    output_shape = ((A.shape[0] - kernel_size) // stride + 1,
+                    (A.shape[1] - kernel_size) // stride + 1)
+
+    shape_w = (output_shape[0], output_shape[1], kernel_size, kernel_size)
+    strides_w = (stride * A.strides[0], stride * A.strides[1], A.strides[0], A.strides[1])
+
+    A_w = as_strided(A, shape_w, strides_w)
+
+    # Return the result of pooling
+    if pool_mode == 'max':
+        return A_w.max(axis=(2, 3))
+    elif pool_mode == 'avg':
+        return A_w.mean(axis=(2, 3))
+
 
 # TODO redo the dataset with channels_firts and update training scripts
 def main(args):
@@ -13,7 +45,7 @@ def main(args):
             files.append(f)
     with h5py.File(args.output_path, "w") as hf:
         dt = h5py.string_dtype(encoding='utf-8') # allows storing variable length strings
-        hf.create_dataset("images", [len(files), len(args.filters), args.size, args.size], dtype=np.float32)
+        hf.create_dataset("images", [len(files), len(args.filters), args.size//(2**args.downsample), args.size//(2**args.downsample)], dtype=np.float32)
         hf["images"].attrs["units"] = 'AB mag/arcsec2'
         for i, _filter in enumerate(args.filters):
             hf["images"].attrs[f"channel_{i}"] = _filter
@@ -56,13 +88,19 @@ def main(args):
                 right_crop = left_crop + ((total_size - args.size) % 2)
                 for j, _filter in enumerate(args.filters):
                     image = data[_filter].data
-                    hf["images"][i, j] = image[left_crop:total_size - right_crop, left_crop:total_size - right_crop],
+                    image = image[left_crop:total_size - right_crop, left_crop:total_size - right_crop]
+                    if args.downsample > 0:
+                        image = pool2d(image, kernel_size=2**args.downsample, stride=2**args.downsample, pool_mode="avg")
+                    hf["images"][i, j] = image
             else:
                 left_pad = (args.size - total_size) // 2
                 right_pad = left_pad + ((args.size - total_size) % 2)
                 for j, _filter in enumerate(args.filters):
                     image = data[_filter].data
-                    hf["images"][i, j] = np.pad(image, [[left_pad, right_pad]]*2, mode="constant", constant_values=99),
+                    image = np.pad(image, [[left_pad, right_pad]]*2, mode="constant", constant_values=99)
+                    if args.downsample > 0:
+                        image = pool2d(image, kernel_size=2**args.downsample, stride=2**args.downsample, pool_mode="avg")
+                    hf["images"][i, j] = image
             hf["SIMTAG"][i] = hdr["SIMTAG"]
             hf["SNAPNUM"][i] = hdr["SNAPNUM"]
             hf["SUBHALO"][i] = hdr["SUBHALO"]
@@ -79,6 +117,7 @@ if __name__ == "__main__":
     from argparse import ArgumentParser
     parser = ArgumentParser()
     parser.add_argument("--size", default=512, type=int)
+    parser.add_argument("--downsample", default=0, type=int)
     parser.add_argument("--filters", nargs="+", required=True)
     parser.add_argument("--skirt_path", required=True)
     parser.add_argument("--output_path", required=True)
