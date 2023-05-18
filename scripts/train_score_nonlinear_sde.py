@@ -175,7 +175,7 @@ def main(args):
         for batch, x in enumerate(dataset):
             start = time.time()
             if args.downsample > 0:
-                x = avg_pool2d(x, kernel_size=2*args.downsample, stride=2*args.downsample)
+                x = avg_pool2d(x, kernel_size=2**args.downsample, stride=2**args.downsample)
             x = preprocessing_nonlinear_sde(x, minimum_flux=args.minimum_flux)
             # optimize network
             optimizer.zero_grad()

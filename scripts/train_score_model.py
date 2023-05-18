@@ -137,7 +137,7 @@ def main(args):
         for batch, x in enumerate(dataset):
             start = time.time()
             if args.downsample > 0:
-                x = avg_pool2d(x, kernel_size=2*args.downsample, stride=2*args.downsample)
+                x = avg_pool2d(x, kernel_size=2**args.downsample, stride=2**args.downsample)
             # preprocessing
             if args.linear_preprocessing:
                 x = linear_preprocessing(x)
