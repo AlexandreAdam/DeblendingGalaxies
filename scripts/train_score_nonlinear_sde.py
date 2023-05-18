@@ -182,7 +182,7 @@ def main(args):
             loss = loss_fn(x)
             loss.backward()
             # warmup learning rate
-            if step <= args.warmup:
+            if step < args.warmup:
                 for g in optimizer.param_groups:
                     g['lr'] = args.learning_rate * np.minimum(step / args.warmup, 1.0)
             # gradient clipping
@@ -272,7 +272,7 @@ if __name__ == '__main__':
     parser.add_argument("--tolerance",                      default=0,      type=float,     help="Current score <= (1 - tolerance) * best score => reset patience, else reduce patience.")
     parser.add_argument("--max_time",                       default=np.inf, type=float,     help="Time allowed for the training, in hours.")
     parser.add_argument("--ema_decay",                      default=0.999,  type=float)
-    parser.add_argument("--warmup",                         default=0,      type=int,       help="Warmup the learning up to the target learning rate over this amount of iterations")
+    parser.add_argument("--warmup",                         default=1,      type=int,       help="Warmup the learning up to the target learning rate over this amount of iterations")
     parser.add_argument("--clip",                           default=0.,     type=float,     help="Gradient clipping")
     parser.add_argument("--hutchinson_noise_type",          default="rademacher",           help="Noise used to compute the trace in SSM with Hutchinson's estimator")
     parser.add_argument("--n_cotangent_vectors",            default=1,      type=int,       help="Number of samples to use for the trace estimator")
