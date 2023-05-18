@@ -96,7 +96,7 @@ def main(args):
         # We pass x_log_detrended (model input) in the loss, but weight must be computed at detrended value (or x_log)
         lambda_t = lambda x, t: model.sde.sigma(t) ** 2 * torch.exp(-2 * (x + torch.log(model.beta0 + model.beta1 * t.view(*broadcast))))
         return sliced_score_matching_loss(
-            model=model,
+            model=model.score,
             samples=x_log_detrended,
             t=t,
             lambda_t=lambda_t,
