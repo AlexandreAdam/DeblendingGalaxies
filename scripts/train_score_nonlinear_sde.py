@@ -275,6 +275,7 @@ if __name__ == '__main__':
     parser.add_argument("--warmup",                         default=0,      type=int,       help="Warmup the learning up to the target learning rate over this amount of iterations")
     parser.add_argument("--clip",                           default=0.,     type=float,     help="Gradient clipping")
     parser.add_argument("--hutchinson_noise_type",          default="rademacher",           help="Noise used to compute the trace in SSM with Hutchinson's estimator")
+    parser.add_argument("--n_cotangent_vectors",            default=1,      type=int,       help="Number of samples to use for the trace estimator")
 
     # Training set params
     parser.add_argument("--batch_size",             default=1,      type=int,       help="Number of images in a batch.")
