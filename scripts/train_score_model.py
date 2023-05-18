@@ -67,8 +67,10 @@ def main(args):
         return torch.sum((mu + model(mean + sigma_ * mu, t)) ** 2) / B
 
     dataset = Dataset(args.dataset_path, args.dataset_key, args.dataset_channels, device=DEVICE)
-    dataset = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
-
+    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=True)
+    data_iter = iter(dataloader)
+    if args.epoch_terations is None:
+        vars(args)["epoch_iterations"] = len(dataloader)
     # ==== Take care of where to write logs and stuff =================================================================
     if args.model_id.lower() != "none":
         logname = args.model_id
@@ -134,8 +136,14 @@ def main(args):
         epoch_start = time.time()
         time_per_step_epoch_mean = 0
         cost = 0
-        for batch, x in enumerate(dataset):
+        for _ in range(args.epoch_iterations):
             start = time.time()
+            try:
+                x = next(data_iter)
+            except StopIteration:
+                # End of dataset reached, reset the iterator
+                data_iter = iter(dataloader)
+                x = next(data_iter)
             if args.downsample > 0:
                 x = avg_pool2d(x, kernel_size=2**args.downsample, stride=2**args.downsample)
             # preprocessing
@@ -160,15 +168,7 @@ def main(args):
             _time = time.time() - start
             time_per_step_epoch_mean += _time
             cost += float(loss)
-            if step % args.ema_log_freq == 0:
-                with ema.average_parameters():
-                    with torch.no_grad():
-                        loss = loss_fn(x)
-                        writer.add_scalar("EMA MSE", float(loss), step)
             step += 1
-            if args.epoch_iterations is not None:
-                if batch >= args.epoch_iterations:
-                    break
 
         time_per_step_epoch_mean /= len(dataset)
         cost /= len(dataset)
@@ -251,14 +251,15 @@ if __name__ == '__main__':
     # Training set params
     parser.add_argument("--batch_size",             default=1,      type=int,       help="Number of images in a batch.")
     parser.add_argument("--downsample",             default=0,   type=int,       help="Average pooling, if zero, no downsampling, if 1, then downsample by a factor of 2, etc. ")
+    parser.add_argument("--shuffle",                action="store_true",            help="Shuffle the dataset, not recommended for large hdf5 datasets, will slow down training tremedously")
+
     # logs
     parser.add_argument("--logdir",             default="None",                     help="Path of logs directory. Default if None, no logs recorded.")
     parser.add_argument("--logname",            default=None,                       help="Overwrite name of the log with this argument")
     parser.add_argument("--logname_prefixe",    default="score_model",                  help="If name of the log is not provided, this prefix is prepended to the date")
     parser.add_argument("--model_dir",          default="None",                     help="Path to the directory where to save models checkpoints.")
     parser.add_argument("--checkpoints",        default=10, type=int,               help="Save a checkpoint of the models each {%} epoch.")
-    parser.add_argument("--models_to_keep",     default=10,  type=int,               help="Only keep 3 best model, on top of the last checkpoint")
-    parser.add_argument("--ema_log_freq",       default=1000,                        help="Log the ema loss function every x step")
+    parser.add_argument("--models_to_keep",     default=2,  type=int,               help="Only keep 3 best model, on top of the last checkpoint")
 
     # Reproducibility params
     parser.add_argument("--seed",                   default=None,   type=int,       help="Random seed for numpy and tensorflow.")

@@ -105,8 +105,10 @@ def main(args):
         )
 
     dataset = Dataset(args.dataset_path, args.dataset_key, args.dataset_channels, device=DEVICE)
-    dataset = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
-
+    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=True)
+    data_iter = iter(dataloader)
+    if args.epoch_terations is None:
+        vars(args)["epoch_iterations"] = len(dataloader)
     # ==== Take care of where to write logs and stuff =================================================================
     if args.model_id.lower() != "none":
         logname = args.model_id
@@ -166,14 +168,21 @@ def main(args):
     global_start = time.time()
     estimated_time_for_epoch = 0
     out_of_time = False
+
     for epoch in tqdm(range(args.epochs)):
         if (time.time() - global_start) > args.max_time * 3600 - estimated_time_for_epoch:
             break
         epoch_start = time.time()
         time_per_step_epoch_mean = 0
         cost = 0
-        for batch, x in enumerate(dataset):
+        for _ in range(args.epoch_iterations):
             start = time.time()
+            try:
+                x = next(data_iter)
+            except StopIteration:
+                # End of dataset reached, reset the iterator
+                data_iter = iter(dataloader)
+                x = next(data_iter)
             if args.downsample > 0:
                 x = avg_pool2d(x, kernel_size=2**args.downsample, stride=2**args.downsample)
             x = preprocessing_nonlinear_sde(x, minimum_flux=args.minimum_flux)
@@ -195,15 +204,11 @@ def main(args):
             time_per_step_epoch_mean += _time
             cost += float(loss)
             step += 1
-            if args.epoch_iterations is not None:
-                if batch >= args.epoch_iterations:
-                    break
 
-        time_per_step_epoch_mean /= len(dataset)
-        cost /= len(dataset)
+        time_per_step_epoch_mean /= args.epoch_iterations
+        cost /= args.epoch_iterations
         writer.add_scalar("MSE", cost, step)
-        print(f"epoch {epoch} | cost {cost:.3e} "
-              f"| time per step {time_per_step_epoch_mean:.2e} s")
+        print(f"epoch {epoch} | cost {cost:.3e} | time per step {time_per_step_epoch_mean:.2e} s")
         history["cost"].append(cost)
         history["learning_rate"].append(optimizer.param_groups[0]['lr'])
         history["time_per_step"].append(time_per_step_epoch_mean)
@@ -280,6 +285,7 @@ if __name__ == '__main__':
     # Training set params
     parser.add_argument("--batch_size",             default=1,      type=int,       help="Number of images in a batch.")
     parser.add_argument("--downsample",             default=0,   type=int,       help="Average pooling, if zero, no downsampling, if 1, then downsample by a factor of 2, etc. ")
+    parser.add_argument("--shuffle",                action="store_true",            help="Shuffle the dataset, not recommended for large hdf5 datasets, will slow down training tremedously")
     # logs
     parser.add_argument("--logdir",             default="None",                     help="Path of logs directory. Default if None, no logs recorded.")
     parser.add_argument("--logname",            default=None,                       help="Overwrite name of the log with this argument")

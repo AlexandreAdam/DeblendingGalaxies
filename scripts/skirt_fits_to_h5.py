@@ -5,7 +5,7 @@ from astropy.io import fits
 from tqdm import tqdm
 import numpy as np
 
-
+# TODO redo the dataset with channels_firts and update training scripts
 def main(args):
     files = []
     for directory in tqdm(os.listdir(args.skirt_path)):
@@ -13,7 +13,7 @@ def main(args):
             files.append(f)
     with h5py.File(args.output_path, "w") as hf:
         dt = h5py.string_dtype(encoding='utf-8') # allows storing variable length strings
-        hf.create_dataset("images", [len(files), len(args.filters), args.size, args.size], dtype=np.float32, chunks=(1, 1, 512, 512))
+        hf.create_dataset("images", [len(files), len(args.filters), args.size, args.size], dtype=np.float32)
         hf["images"].attrs["units"] = 'AB mag/arcsec2'
         for i, _filter in enumerate(args.filters):
             hf["images"].attrs[f"channel_{i}"] = _filter
