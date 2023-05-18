@@ -90,10 +90,10 @@ def main(args):
         broadcast = [-1, *[1] * len(D)]  # used to broadcast scalars to image shape
         z = torch.randn_like(x)
         t = torch.rand(B).to(DEVICE)
-        x_log = torch.log(x + model.beta0 + model.beta1 * t.view(*broadcast) + z * model.sde.sigma(t).view(*broadcast))
-        x_log_detrended = x_log - torch.log(model.beta0 + model.beta1 * t.view(*broadcast))
+        x_log = torch.log(x + model.module.beta0 + model.module.beta1 * t.view(*broadcast) + z * model.module.sde.sigma(t).view(*broadcast))
+        x_log_detrended = x_log - torch.log(model.module.beta0 + model.module.beta1 * t.view(*broadcast))
         # We pass x_log_detrended (model input) in the loss, but weight must be computed at detrended value (or x_log)
-        lambda_t = lambda x, t: model.sde.sigma(t) ** 2 * torch.exp(-2 * (x + torch.log(model.beta0 + model.beta1 * t.view(*broadcast))))
+        lambda_t = lambda x, t: model.module.sde.sigma(t) ** 2 * torch.exp(-2 * (x + torch.log(model.module.beta0 + model.module.beta1 * t.view(*broadcast))))
         return sliced_score_matching_loss(
             model=model,
             samples=x_log_detrended,
