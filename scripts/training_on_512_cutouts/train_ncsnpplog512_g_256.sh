@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --tasks=1
 #SBATCH --cpus-per-task=1 # maximum cpu per task is 3.5 per gpus
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:1
 #SBATCH --mem=32G			     # memory per node
 #SBATCH --time=02-23:00		# time (DD-HH:MM)
 #SBATCH --account=rrg-lplevass
@@ -17,7 +17,7 @@ python $DEBLENDER/scripts/train_score_nonlinear_sde.py\
   --epochs=10000\
   --learning_rate=1e-4\
   --max_time=70\
-  --batch_size=16\
+  --batch_size=8\
   --logdir=$DEBLENDER/logs/\
   --logname_prefixe=ncsnpplog_skirt_g_256\
   --model_dir=$DEBLENDER/models/\
