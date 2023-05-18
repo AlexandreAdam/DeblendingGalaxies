@@ -23,5 +23,5 @@ python $DEBLENDER/scripts/train_score_nonlinear_sde.py\
   --model_dir=$DEBLENDER/models/\
   --checkpoints=2\
   --minimum_flux=1e-3\
-  --epoch_iterations=1000\
+  --epoch_iterations=10000\
   --downsample=3
