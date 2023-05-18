@@ -1,7 +1,7 @@
 from score_models import NCSNppLog
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from definitions import preprocessing, linear_preprocessing
+from definitions import preprocessing_nonlinear_sde
 from datetime import datetime
 from tqdm import tqdm
 from torch.nn.functional import avg_pool2d
@@ -14,9 +14,40 @@ from glob import glob
 import re
 import h5py
 from torch_ema import ExponentialMovingAverage
+from functorch import vjp
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 LOG10 = np.log(10.)
+
+
+def sliced_score_matching_loss(model, samples, t, lambda_t, n_cotangent_vectors=1,  noise_type="rademacher"):
+    """
+    Score matching loss with the Hutchinson trace estimator trick. See Theorem 1 of
+    Hyvärinen (2005). Estimation of Non-Normalized Statistical Models by Score Matching,
+    (https://www.jmlr.org/papers/volume6/hyvarinen05a/hyvarinen05a.pdf).
+
+    We implement an unbiased estimator of this loss with reduced variance reported in
+    Y. Song et al. (2019). A Scalable Approach to Density and Score Estimation
+    (https://arxiv.org/abs/1905.07088).
+
+    Inspired from the official implementation of Sliced Score Matching at https://github.com/ermongroup/sliced_score_matching
+    We also implement the weighting scheme for NCSN (Song & Ermon 2019 https://arxiv.org/abs/1907.05600)
+    """
+    if noise_type not in ["gaussian", "rademacher"]:
+        raise ValueError("noise_type has to be either 'gaussian' or 'rademacher'")
+    B, *D = samples.shape
+    # duplicate noisy samples across the number of particle for the Hutchinson trace estimator
+    samples = torch.tile(samples, [n_cotangent_vectors, *[1]*len(D)])
+    t = torch.tile(t, [n_cotangent_vectors])
+
+    # sample cotangent vectors
+    vectors = torch.randn_like(samples)
+    if noise_type == 'rademacher':
+        vectors = vectors.sign()
+    score, vjp_func = vjp(lambda x: model(x, t), samples)
+    trace_estimate = vectors * vjp_func(vectors)[0]
+    loss = (lambda_t(samples, t) * (0.5 * torch.sum(score**2, dim=-1) + torch.sum(trace_estimate, dim=-1))).mean()
+    return loss
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -50,21 +81,27 @@ def main(args):
     else:
         raise ValueError
 
-    # TODO add x_mean parameter, and save it alongside model. Specify in loading function how to load x_mean.
-    # TODO preprocessing to cut log values, then go back to linear space for SDE
-    # TODO import SSM loss, make sure to deal with detrending carefuly.
-    hyperparameters["dynamic_range"] = args.dynamic_range
+    hyperparameters["minimum_flu"] = args.minimum_flux
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     ema = ExponentialMovingAverage(model.parameters(), decay=args.ema_decay)
    
     def loss_fn(x):
         B, *D = x.shape
-        broadcast = [B, *[1] * len(D)]
-        mu = torch.randn_like(x)
-        t = torch.rand(B).to(DEVICE) * model.module.sde.T
-        mean, sigma = model.module.sde.marginal_prob(x, t)
-        sigma_ = sigma.view(*broadcast)
-        return torch.sum((mu + model(mean + sigma_ * mu, t)) ** 2) / B
+        broadcast = [-1, *[1] * len(D)]  # used to broadcast scalars to image shape
+        z = torch.randn_like(x)
+        t = torch.rand(B).to(DEVICE)
+        x_log = torch.log(x + model.beta0 + model.beta1 * t.view(*broadcast) + z * model.sde.sigma(t).view(*broadcast))
+        x_log_detrended = x_log - torch.log(model.beta0 + model.beta1 * t.view(*broadcast))
+        # We pass x_log_detrended (model input) in the loss, but weight must be computed at detrended value (or x_log)
+        lambda_t = lambda x, t: model.sde.sigma(t) ** 2 * torch.exp(-2 * (x + torch.log(model.beta0 + model.beta1 * t.view(*broadcast))))
+        return sliced_score_matching_loss(
+            model=model,
+            samples=x_log_detrended,
+            t=t,
+            lambda_t=lambda_t,
+            noise_type=args.hutchinson_noise_type,
+            n_cotangent_vectors=args.n_cotangent_vectors
+        )
 
     dataset = Dataset(args.dataset_path, args.dataset_key, args.dataset_channels, device=DEVICE)
     dataset = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
@@ -138,11 +175,7 @@ def main(args):
             start = time.time()
             if args.downsample > 0:
                 x = avg_pool2d(x, kernel_size=2*args.downsample, stride=2*args.downsample)
-            # preprocessing
-            if args.linear_preprocessing:
-                x = linear_preprocessing(x)
-            else:
-                x = preprocessing(x, dynamic_range=args.dynamic_range)
+            x = preprocessing_nonlinear_sde(x, minimum_flux=args.minimum_flux)
             # optimize network
             optimizer.zero_grad()
             loss = loss_fn(x)
@@ -160,11 +193,6 @@ def main(args):
             _time = time.time() - start
             time_per_step_epoch_mean += _time
             cost += float(loss)
-            if step % args.ema_log_freq == 0:
-                with ema.average_parameters():
-                    with torch.no_grad():
-                        loss = loss_fn(x)
-                        writer.add_scalar("EMA MSE", float(loss), step)
             step += 1
             if args.epoch_iterations is not None:
                 if batch >= args.epoch_iterations:
@@ -231,7 +259,7 @@ if __name__ == '__main__':
     parser.add_argument("--dataset_channels",   nargs="+", required=True, type=int, help="Channels of the dataset to use. ")
     parser.add_argument("--model_id",           default="none",                     help="The script will search in provided model_dir argument for model_id and load checkpoint if it exists.")
     parser.add_argument("--model_checkpoint",   default=None,       type=int,       help="Index of the checkpoint to load.")
-    parser.add_argument("--dynamic_range",		default=1e5,		type=float)
+    parser.add_argument("--minimum_flux",		default=1e-3,		type=float)
 
     # Model parameters
     parser.add_argument("--model_parameters",               required=True,                  help="Path to model parameter json file.")
@@ -257,7 +285,6 @@ if __name__ == '__main__':
     parser.add_argument("--model_dir",          default="None",                     help="Path to the directory where to save models checkpoints.")
     parser.add_argument("--checkpoints",        default=10, type=int,               help="Save a checkpoint of the models each {%} epoch.")
     parser.add_argument("--models_to_keep",     default=2,  type=int,               help="Only keep 3 best model, on top of the last checkpoint")
-    parser.add_argument("--ema_log_freq",       default=1000,                        help="Log the ema loss function every x step")
 
     # Reproducibility params
     parser.add_argument("--seed",                   default=None,   type=int,       help="Random seed for numpy and tensorflow.")
