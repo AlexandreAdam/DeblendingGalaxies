@@ -107,7 +107,7 @@ def main(args):
     dataset = Dataset(args.dataset_path, args.dataset_key, args.dataset_channels, device=DEVICE)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=True)
     data_iter = iter(dataloader)
-    if args.epoch_terations is None:
+    if args.epoch_iterations is None:
         vars(args)["epoch_iterations"] = len(dataloader)
     # ==== Take care of where to write logs and stuff =================================================================
     if args.model_id.lower() != "none":

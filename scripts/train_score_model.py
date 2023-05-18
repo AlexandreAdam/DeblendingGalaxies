@@ -69,7 +69,7 @@ def main(args):
     dataset = Dataset(args.dataset_path, args.dataset_key, args.dataset_channels, device=DEVICE)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=True)
     data_iter = iter(dataloader)
-    if args.epoch_terations is None:
+    if args.epoch_iterations is None:
         vars(args)["epoch_iterations"] = len(dataloader)
     # ==== Take care of where to write logs and stuff =================================================================
     if args.model_id.lower() != "none":
@@ -170,8 +170,8 @@ def main(args):
             cost += float(loss)
             step += 1
 
-        time_per_step_epoch_mean /= len(dataset)
-        cost /= len(dataset)
+        time_per_step_epoch_mean /= args.epoch_iterations
+        cost /= args.epoch_iterations
         writer.add_scalar("MSE", cost, step)
         print(f"epoch {epoch} | cost {cost:.3e} "
               f"| time per step {time_per_step_epoch_mean:.2e} s")
