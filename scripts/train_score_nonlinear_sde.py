@@ -85,7 +85,7 @@ def main(args):
     else:
         raise ValueError
 
-    hyperparameters["minimum_flu"] = args.minimum_flux
+    hyperparameters["minimum_flux"] = args.minimum_flux
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     ema = ExponentialMovingAverage(model.parameters(), decay=args.ema_decay)
    
