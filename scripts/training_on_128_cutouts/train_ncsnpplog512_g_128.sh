@@ -7,10 +7,11 @@
 #SBATCH --account=rrg-lplevass
 #SBATCH --job-name=Train_SKIRT128_log_g
 #SBATCH --output=%x-%j.out
+cp $HOME/scratch/skirt128_grizy.h5 $SLURM_TMPDIR/skirt128_grizy.h5
 source $HOME/environments/scope/bin/activate
 python $DEBLENDER/scripts/train_score_nonlinear_sde.py\
   --model_architecture=ncsnpplog\
-  --dataset_path=/home/aadam/scratch/skirt128_grizy.h5\
+  --dataset_path=$SLURM_TMPDIR/skirt128_grizy.h5\
   --dataset_channels 0\
   --dataset_key=images\
   --model_parameters=$DEBLENDER/scripts/training_on_128_cutouts/ncsnpplog_skirt512_single_channel_128.json\
