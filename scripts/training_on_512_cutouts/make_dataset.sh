@@ -5,7 +5,6 @@
 source $HOME/environments/scope/bin/activate
 python $DEBLENDER/scripts/skirt_fits_to_h5.py\
         --size=512\
-        --downsample=2\
         --filters SUBARU_HSC.G SUBARU_HSC.R SUBARU_HSC.I SUBARU_HSC.Z SUBARU_HSC.Y\
         --skirt_path=$HOME/scratch/SKIRT_TNG\
-        --output_path=$HOME/scratch/skirt128_grizy.h5
+        --output_path=$HOME/scratch/skirt512_grizy.h5

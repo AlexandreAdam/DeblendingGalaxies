@@ -51,22 +51,25 @@ def sliced_score_matching_loss(model, samples, t, lambda_t, n_cotangent_vectors=
 
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, path_to_h5, key, channels, device=DEVICE):
+    def __init__(self, path_to_h5, key, channels, channels_last=False, device=DEVICE):
         self.filepath = path_to_h5
         self.device = device
         self.key = key
         self.channels = channels
-        with h5py.File(self.filepath, "r") as hf:
-            self.size = hf[self.key].shape[0]
+        self.channels_last = channels_last
+        self.hf = h5py.File(self.filepath, "r")
+        self.size = self.hf[self.key].shape[0]
 
     def __len__(self):
         return self.size
 
     def __getitem__(self, index):
-        with h5py.File(self.filepath, "r") as hf:
-            im = torch.tensor(hf[self.key][index, :, :, self.channels]).to(self.device)
+        if self.channels_last:
+            im = torch.tensor(self.hf[self.key][index, :, :, self.channels]).to(self.device)
             # put channels first for Conv2D score model
             return torch.permute(im, (2, 0, 1))
+        else:
+            return torch.tensor(self.hf[self.key][index, self.channels]).to(self.device)
 
 
 def main(args):
@@ -104,7 +107,7 @@ def main(args):
             n_cotangent_vectors=args.n_cotangent_vectors
         )
 
-    dataset = Dataset(args.dataset_path, args.dataset_key, args.dataset_channels, device=DEVICE)
+    dataset = Dataset(args.dataset_path, args.dataset_key, args.dataset_channels, channels_last=args.channels_last, device=DEVICE)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=True)
     data_iter = iter(dataloader)
     if args.epoch_iterations is None:
@@ -286,6 +289,7 @@ if __name__ == '__main__':
     parser.add_argument("--batch_size",             default=1,      type=int,       help="Number of images in a batch.")
     parser.add_argument("--downsample",             default=0,   type=int,       help="Average pooling, if zero, no downsampling, if 1, then downsample by a factor of 2, etc. ")
     parser.add_argument("--shuffle",                action="store_true",            help="Shuffle the dataset, not recommended for large hdf5 datasets, will slow down training tremedously")
+    parser.add_argument("--channels_last",          action="store_true",            help="Wether the data was saved in channels_last format. For backward compatibility mainly. ")
     # logs
     parser.add_argument("--logdir",             default="None",                     help="Path of logs directory. Default if None, no logs recorded.")
     parser.add_argument("--logname",            default=None,                       help="Overwrite name of the log with this argument")
