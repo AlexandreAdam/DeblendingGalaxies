@@ -186,7 +186,7 @@ def main(args):
         raise NotImplementedError("pseudo inverse likelihood not yet supported")
     elif args.slic_likelihood:
         def convolved_likelihood_gradient(x, t):
-            y_hat, vjpfunc = vjp(forward_model, x)
+            y_hat, vjpfunc = vjp(lambda x: forward_model(link_function(x)), x)
             score = slic_model.score(observation - y_hat, t)
             grad = vjpfunc(score)[0]
             return -grad
@@ -201,7 +201,7 @@ def main(args):
         def score_fn(x, t):
             B, *D = x.shape
             prior_score = prior_model(x, t) / sigma(t)
-            likelihood_score = convolved_likelihood_gradient(link_function(x), t)
+            likelihood_score = convolved_likelihood_gradient(x, t)
             return prior_score + args.slic_likelihood_fudge_factor * likelihood_score
 
     def euler_maruyama_step(x, t, dt):
