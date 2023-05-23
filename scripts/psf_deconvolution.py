@@ -115,7 +115,7 @@ def main(args):
     # Load model
     prior_model = load_model(args.checkpoints_dir, architecture=NCSNpp, data_parallel=False, model_checkpoint=args.model_checkpoint)
     # Hack the VESDE in the model for readability
-    sde = prior_model.module.sde # .module is a hack to
+    sde = prior_model.sde # .module is a hack to
     sigma_min = sde.sigma_min
     sigma_max = sde.sigma_max
     def sigma(t): # scale of the marginal prob. distiribution
