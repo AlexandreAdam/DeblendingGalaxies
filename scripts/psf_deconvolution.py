@@ -113,7 +113,7 @@ def main(args):
         print(f"Model has pixel size {args.model_pixel_size} as and field of view {args.model_pixel_size * args.model_pixels} as")
 
     # Load model
-    prior_model = load_model(args.checkpoints_dir, architecture=NCSNpp, data_parallel=True, model_checkpoint=args.model_checkpoint)
+    prior_model = load_model(args.checkpoints_dir, architecture=NCSNpp, data_parallel=False, model_checkpoint=args.model_checkpoint)
     # Hack the VESDE in the model for readability
     sde = prior_model.module.sde # .module is a hack to
     sigma_min = sde.sigma_min
@@ -136,7 +136,7 @@ def main(args):
         vars(args)["observation_pixels"] = pixels
 
     if args.slic_likelihood:
-        slic_model = load_model(args.slic_model, architecture=NCSNpp, data_parallel=True, model_checkpoint=args.model_checkpoint)
+        slic_model = load_model(args.slic_model, architecture=NCSNpp, data_parallel=False, model_checkpoint=args.model_checkpoint)
 
     # TODO support multiple channels
     # Todo possibly convert pixel size from pc in Connor B. fits file to arcsec using a user specified Hubble constant and redshift
