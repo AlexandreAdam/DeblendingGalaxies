@@ -7,10 +7,11 @@
 #SBATCH --account=rrg-lplevass
 #SBATCH --job-name=Train_SKIRT256_g
 #SBATCH --output=%x-%j.out
+cp $HOME/scratch/skirt256_grizy.h5 $SLURM_TMPDIR/skirt256_grizy.h5
 source $HOME/environments/scope/bin/activate
 python $DEBLENDER/scripts/train_score_model.py\
   --model_architecture=ncsnpp\
-  --dataset_path=/home/aadam/scratch/skirt512_grizy.h5\
+  --dataset_path=$SLURM_TMPDIR/skirt256_grizy.h5\
   --dataset_channels 0\
   --dataset_key=images\
   --model_parameters=$DEBLENDER/scripts/training_on_512_cutouts/ncsnpp_skirt512_single_channel_256.json\
