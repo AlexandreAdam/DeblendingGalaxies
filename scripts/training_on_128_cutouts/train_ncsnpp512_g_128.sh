@@ -5,25 +5,24 @@
 #SBATCH --mem=32G			     # memory per node
 #SBATCH --time=02-23:00		# time (DD-HH:MM)
 #SBATCH --account=rrg-lplevass
-#SBATCH --job-name=Train_SKIRT256_g
+#SBATCH --job-name=Train_SKIRT128_g
 #SBATCH --output=%x-%j.out
+cp $HOME/scratch/skirt128_grizy.h5 $SLURM_TMPDIR/skirt128_grizy.h5
 source $HOME/environments/scope/bin/activate
 python $DEBLENDER/scripts/train_score_model.py\
   --model_architecture=ncsnpp\
-  --dataset_path=/home/aadam/scratch/skirt512_grizy.h5\
+  --dataset_path=$SLURM_TMPDIR/skirt128_grizy.h5\
   --dataset_channels 0\
   --dataset_key=images\
-  --model_parameters=$DEBLENDER/scripts/training_on_512_cutouts/ncsnpp_skirt512_single_channel_256.json\
+  --model_parameters=$DEBLENDER/scripts/training_on_128_cutouts/ncsnpplog_skirt512_single_channel_128.json\
   --epochs=10000\
   --learning_rate=2e-5\
   --max_time=70\
   --batch_size=4\
   --logdir=$DEBLENDER/logs/\
-  --logname_prefixe=ncsnpp_skirt_g_256_linear\
+  --logname_prefixe=ncsnpp_skirt_g_128\
   --model_dir=$DEBLENDER/models/\
   --checkpoints=10\
   --seed=42\
   --dynamic_range=1e5\
   --epoch_iterations=1000\
-  --downsample=1
-

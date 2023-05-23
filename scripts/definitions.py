@@ -43,7 +43,7 @@ def preprocessing(img, dynamic_range=1e5):
     We want the diffusion to happen in log space so that generated images
     strictly have positive flux.
 
-    We use log10(micro Jansky / arcsec^2) units instead of AB mag.
+    We use log10(10 micro Jansky / arcsec^2) units instead of AB mag.
 
     dynamic_range: Sets the decimal value, in Jansky, up to which we hope to model the surface
         brightness. This preprocessing destroys the information below the dynamic range,
@@ -52,7 +52,7 @@ def preprocessing(img, dynamic_range=1e5):
     [0, log10(dynamic_range)].
     """
     img = ab_mag_to_jansky_per_arcsec_squared(img)
-    return torch.log(1e6 * img + 1/dynamic_range) / np.log(10.) + np.log10(dynamic_range)
+    return torch.log(1e5 * img + 1/dynamic_range) / np.log(10.) + np.log10(dynamic_range)
 
 
 def preprocessing_nonlinear_sde(img, minimum_flux=1e-3):

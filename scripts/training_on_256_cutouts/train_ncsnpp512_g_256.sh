@@ -19,11 +19,9 @@ python $DEBLENDER/scripts/train_score_model.py\
   --max_time=70\
   --batch_size=4\
   --logdir=$DEBLENDER/logs/\
-  --logname_prefixe=ncsnpp_skirt_g_256_linear\
+  --logname_prefixe=ncsnpp_skirt_g_256\
   --model_dir=$DEBLENDER/models/\
   --checkpoints=10\
   --seed=42\
   --dynamic_range=1e5\
   --epoch_iterations=1000\
-  --downsample=1
-
