@@ -31,6 +31,7 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --slic_likelihood_fudge_factor=10\
   --noise_map_multiplicative_factor=1\
   --noise_map=$HOME/projects/rrg-lplevass/data/hst_cutouts_noclip.npy\
+  --noise_index=9\
   --result_dir=$DEBLENDER/results/\
   --checkpoints_dir=$HOME/projects/rrg-lplevass/data/score_models/ncsnpp_ct_g_220912024942\
   -N=4000\

@@ -22,6 +22,14 @@ N_WORKERS = int(os.getenv('SLURM_ARRAY_TASK_COUNT', 1))
 THIS_WORKER = int(os.getenv('SLURM_ARRAY_TASK_ID', 1))
 
 
+def probes_link_function(x):
+    return (x + 1) / 2.
+
+
+def skirt_link_function(x):
+    return x
+
+
 def preprocess_probes_g_channel(img):  # channel 0
     img = torch.clamp(img, 0, 1.48)
     img = 2 * img / 1.48 - 1.
@@ -149,18 +157,20 @@ def main(args):
             reference_profile = torch.nn.functional.avg_pool2d(reference_profile, kernel_size=2 * args.downsample, stride=2 * args.downsample)
         if args.probes:
             reference_profile = preprocess_probes_g_channel(reference_profile)
+            link_function = probes_link_function
         else:
             reference_profile = linear_preprocessing(reference_profile)
-        observation = forward_model(reference_profile)
+            link_function = skirt_link_function
+        observation = forward_model(link_function(reference_profile))
         if args.slic_likelihood:
             print(f"Using noise map {args.noise_map} | id = {args.noise_index}")
-            noise = np.load(args.noise_map)[args.noise_index]
+            noise = np.load(args.noise_map)[args.noise_index].astype(np.float32)
             # with h5py.File(args.noise_map, "r") as hf:
             #     noise = hf[args.noise_key][args.noise_index] # TODO support multiple channels
             #     *_, H, W = noise.shape
             noise = torch.tensor(noise).view(1, 1, *noise.shape).to(DEVICE)
             noise = CenterCrop(args.observation_pixels)(noise)
-            observation += noise
+            observation += args.noise_map_multiplicative_factor * noise
         else:
             print(f"Using Gaussian noise with rms = {args.noise_rms}")
             observation += torch.randn_like(observation) * args.noise_rms
@@ -191,7 +201,7 @@ def main(args):
         def score_fn(x, t):
             B, *D = x.shape
             prior_score = prior_model(x, t) / sigma(t)
-            likelihood_score = convolved_likelihood_gradient(x, t)
+            likelihood_score = convolved_likelihood_gradient(link_function(x), t)
             return prior_score + args.slic_likelihood_fudge_factor * likelihood_score
 
     def euler_maruyama_step(x, t, dt):
@@ -288,6 +298,8 @@ if __name__ == '__main__':
     parser.add_argument("--slic_model",         default=None,                       help="Path to the slic model")
     parser.add_argument("--slic_model_checkpoint",   default=None, type=int,        help="Index of the slic model checkpoint to load.")
     parser.add_argument("--slic_likelihood_fudge_factor", default=1., type=float,   help="Balance likelihood and prior with this fudge factor.")
+    parser.add_argument("--noise_map",           default=None)
+    parser.add_argument("--noise_map_multiplicative_factor", default=1., type=float, help="Multiply noise map by this factor, modifies noise amplitude")
 
     # Prior sampling mode, this will ignore everything about the data. Used for testing or generating training sets.
     parser.add_argument("--from_prior",         action="store_true",               help="Ignore the observation and sample from the prior")
