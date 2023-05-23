@@ -299,6 +299,7 @@ if __name__ == '__main__':
     parser.add_argument("--slic_model_checkpoint",   default=None, type=int,        help="Index of the slic model checkpoint to load.")
     parser.add_argument("--slic_likelihood_fudge_factor", default=1., type=float,   help="Balance likelihood and prior with this fudge factor.")
     parser.add_argument("--noise_map",           default=None)
+    parser.add_argument("--noise_index",         default=None, type=int)
     parser.add_argument("--noise_map_multiplicative_factor", default=1., type=float, help="Multiply noise map by this factor, modifies noise amplitude")
 
     # Prior sampling mode, this will ignore everything about the data. Used for testing or generating training sets.
