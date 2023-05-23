@@ -138,10 +138,13 @@ def main(args):
     forward_model = make_forward_model(args, psf)
 
     if args.injection_test:
-        with h5py.File(args.dataset_path, "r") as hf:
-            reference_profile = torch.tensor(hf[args.dataset_key][args.dataset_id, ..., args.dataset_channels]).to(DEVICE)[None]
         if args.dataset_channels_last:
+            with h5py.File(args.dataset_path, "r") as hf:
+                reference_profile = torch.tensor(hf[args.dataset_key][args.dataset_id, ..., args.dataset_channels]).to(DEVICE)[None]
             reference_profile = torch.permute(reference_profile, (0, 3, 1, 2))  # put channels first
+        else:
+            with h5py.File(args.dataset_path, "r") as hf:
+                reference_profile = torch.tensor(hf[args.dataset_key][args.dataset_id, args.dataset_channels]).to(DEVICE)[None]
         if args.downsample > 0:
             reference_profile = torch.nn.functional.avg_pool2d(reference_profile, kernel_size=2 * args.downsample, stride=2 * args.downsample)
         if args.probes:
@@ -151,12 +154,13 @@ def main(args):
         observation = forward_model(reference_profile)
         if args.slic_likelihood:
             print(f"Using noise map {args.noise_map} | id = {args.noise_index}")
-            with h5py.File(args.noise_map, "r") as hf:
-                noise = hf[args.noise_key][args.noise_index] # TODO support multiple channels
-                *_, H, W = noise.shape
-                noise = torch.tensor(noise).view(1, 1, H, W).to(DEVICE)
-                noise = CenterCrop(args.observation_pixels)(noise)
-                observation += noise
+            noise = np.load(args.noise_map)[args.noise_index]
+            # with h5py.File(args.noise_map, "r") as hf:
+            #     noise = hf[args.noise_key][args.noise_index] # TODO support multiple channels
+            #     *_, H, W = noise.shape
+            noise = torch.tensor(noise).view(1, 1, *noise.shape).to(DEVICE)
+            noise = CenterCrop(args.observation_pixels)(noise)
+            observation += noise
         else:
             print(f"Using Gaussian noise with rms = {args.noise_rms}")
             observation += torch.randn_like(observation) * args.noise_rms
@@ -176,7 +180,6 @@ def main(args):
             score = slic_model.score(observation - y_hat, t)
             grad = vjpfunc(score)[0]
             return -grad
-         # TODO do we need to vmap over convolved_likelihood_gradient? -> no, observation and vjp can be broadcasted by default.
 
     if args.from_prior:
         def score_fn(x, t):
@@ -189,7 +192,7 @@ def main(args):
             B, *D = x.shape
             prior_score = prior_model(x, t) / sigma(t)
             likelihood_score = convolved_likelihood_gradient(x, t)
-            return prior_score + likelihood_score
+            return prior_score + args.slic_likelihood_fudge_factor * likelihood_score
 
     def euler_maruyama_step(x, t, dt):
         t += dt
@@ -284,6 +287,7 @@ if __name__ == '__main__':
     parser.add_argument("--slic_likelihood",    action="store_true",                help="Use a trained SLIC model as an approximation for the likelihood")
     parser.add_argument("--slic_model",         default=None,                       help="Path to the slic model")
     parser.add_argument("--slic_model_checkpoint",   default=None, type=int,        help="Index of the slic model checkpoint to load.")
+    parser.add_argument("--slic_likelihood_fudge_factor", default=1., type=float,   help="Balance likelihood and prior with this fudge factor.")
 
     # Prior sampling mode, this will ignore everything about the data. Used for testing or generating training sets.
     parser.add_argument("--from_prior",         action="store_true",               help="Ignore the observation and sample from the prior")
