@@ -63,7 +63,7 @@ class Dataset(torch.utils.data.Dataset):
         return self.size
 
     def __getitem__(self, index):
-        return torch.tensor(self.dataset[index]).to(self.device)[None]
+        return torch.tensor(self.dataset[index]).float().to(self.device)[None]
 
 
 def main(args):
