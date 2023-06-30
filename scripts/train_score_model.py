@@ -159,7 +159,7 @@ def main(args):
             loss = loss_fn(x)
             loss.backward()
             # warmup learning rate
-            if step <= args.warmup:
+            if step <= args.warmup and args.warmup > 0:
                 for g in optimizer.param_groups:
                     g['lr'] = args.learning_rate * np.minimum(step / args.warmup, 1.0)
             # gradient clipping
