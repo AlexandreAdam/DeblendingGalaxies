@@ -5,6 +5,7 @@ from torchvision.transforms import CenterCrop
 from definitions import DEVICE, linear_preprocessing
 from forward_model import make_forward_model
 from forward_model_old import make_forward_model_old
+from astropy.wcs import WCS
 import numpy as np
 import torch
 import os
