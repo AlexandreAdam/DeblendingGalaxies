@@ -5,8 +5,10 @@ from definitions import DEVICE
 from definitions import interpolate
 
 # Old, keep as reference (didn't account for sub pixel shift)
-def _make_forward_model(args, psf):
+def make_forward_model_old(args, psf):
     """
+    Useful for injection test!! Since we don't care for WCS in those.
+
     Takes in argument specifying the size of the model (number of pixels, size of the pixels)
     and the target size (number of pixels in the image, size of the pixels). It also takes in a psf
     specified by the user for the deconvolution.
@@ -45,11 +47,9 @@ def _make_forward_model(args, psf):
     psf = torch.tensor(psf).to(DEVICE).view(C, 1, H, W) # reshape to a convolution kernel [channel_out, channels_in/groups, H, W]
     batched_interpolation = vmap(interpolate, in_dims=(0, None))  # only batch over the images
 
-    # TODO support a shift of the coordinates
-    # define target coordinates at the super sampling resolution of the psf
     fov = args.observation_pixel_size * args.observation_pixels
     x = torch.linspace(-1, 1, args.super_sampling_factor*args.observation_pixels).float() * fov / 2
-    x, y = torch.meshgrid(x, x, indexing="ij")  # TODO make this coherent with WCS
+    x, y = torch.meshgrid(x, x, indexing="ij")
     # Transform these coordinates into model pixel indices
     _min = - args.model_pixel_size * (args.model_pixels + args.zero_padding) / 2
     i_coord = (x - _min) / args.model_pixel_size

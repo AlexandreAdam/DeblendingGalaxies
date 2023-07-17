@@ -31,6 +31,9 @@ def electron_count_to_ab_mag(img, photflam, photplam, minimum_count):
     zero_point = -2.5 * np.log10(photflam) - 21.10 - 5 * np.log10(photplam) + 18.6921
     return -2.5 * torch.log(torch.maximum(torch.ones_like(img) * minimum_count, img)) / LOG10 + zero_point
 
+def electron_count_to_jansky_per_arcsec_squared(img, photflam, photplam):
+    zero_point = -2.5 * np.log10(photflam) - 21.10 - 5 * np.log10(photplam) + 18.6921
+    return img * 10**(-(zero_point - 8.9)/2.5)
 
 def hst_observation_preprocessing(img, photflam, photplam, minimum_count):
     img = electron_count_to_ab_mag(img, photflam, photplam, minimum_count)
@@ -89,12 +92,13 @@ def inverse_proprocessing(img, dynamic_range=1e5):
     return 10**(img - np.log10(dynamic_range))
 
 
-def interpolate(image, coordinates):
+def interpolate(image, coordinates, zero_fill=False):
     """
     Interpolation function, without a batch size. To make it batched, used vmap from functorch.
     """
     C, H, W = image.shape
     x, y = torch.tensor_split(coordinates, 2, dim=0)
+    idxs_out_of_bounds = (y < 0) | (y > W-1) | (x < 0) | (x > W-1)
     x = x.view(-1)
     y = y.view(-1)
     x0 = torch.floor(x).long()
@@ -120,7 +124,11 @@ def interpolate(image, coordinates):
     wd = (x - x0) * (y - y0)
 
     _, new_H, new_W = coordinates.shape
-    return (wa * Ia + wb * Ib + wc * Ic + wd * Id).view(C, new_H, new_W)
+    result = (wa * Ia + wb * Ib + wc * Ic + wd * Id).view(C, new_H, new_W)
+    if zero_fill:
+        result = torch.where(idxs_out_of_bounds, torch.zeros_like(result), result)
+    return result
+
 
 
 def load_model(checkpoint_dir, architecture, data_parallel=False, model_checkpoint=None):

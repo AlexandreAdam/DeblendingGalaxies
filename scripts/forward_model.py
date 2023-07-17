@@ -1,78 +1,191 @@
 import torch
 from torch import vmap
-from astropy import units as u
+from astropy import units
+from astropy.io import fits
+from astropy.wcs import WCS
+import numpy as np
+from astropy.coordinates import SkyCoord
 import torch.nn.functional as F
 from definitions import interpolate, DEVICE
 
-
-def make_forward_model(args, psf, wcs_list, fiducial_center=None, fiducial_pc=None):
+def make_wcs(skycoord, orientation, pixels, pixel_size):
     """
-    fiducial_center should be a SkyCoord object is passed. Fiducial pc is a (torch) rotation matrix.
-    """
-    C, H, W = psf.shape
-    psf = torch.tensor(psf).to(DEVICE).view(C, 1, H, W) # reshape to a convolution kernel [channel_out, channels_in/groups, H, W]
-    batched_interpolation = vmap(interpolate, in_dims=(0, None))  # only batch over the images
-    matmul = vmap(torch.matmul, in_dims=(None, 0))
+    Create a World Coordinate System (WCS) object based on the given parameters.
 
-    # Collect center of each WCS to infer sub pixel shifts
-    center = args.observation_pixels / 2 - 0.5 # Cutout2D always crop around this pixel
-    if fiducial_center is None:
-        # use first wcs for our fiducial center 
-        fiducial_center = wcs_list[0].pixel_to_world(center, center)
-    observation_centers = []
-    for wcs in wcs_list:
-        observation_centers.append(wcs.pixel_to_world(center, center))
+    Parameters:
+    skycoord (SkyCoord): The sky coordinates of the center of the image.
+    orientation (float): The orientation of the image, defined as East of North in world coordinates.
+    pixels (int): The number of pixels in each dimension of the image.
+    pixel_size (Quantity): The size of each pixel in angular units.
+
+    Returns:
+    WCS: The World Coordinate System object.
+
+    Raises:
+    None.
+
+    This function creates a FITS header and populates it with the necessary keywords to define a WCS.
+    The FITS header is then used to create a WCS object, which can be used to convert between pixel coordinates and sky coordinates.
+
+    The FITS header is populated with the following keywords:
+    - NAXIS1: The number of pixels in the x-axis of the image.
+    - NAXIS2: The number of pixels in the y-axis of the image.
+    - CRVAL1: The right ascension of the center pixel of the image in degrees.
+    - CRVAL2: The declination of the center pixel of the image in degrees.
+    - CUNIT1: The units of the x-axis coordinates (degrees).
+    - CUNIT2: The units of the y-axis coordinates (degrees).
+    - CTYPE1: The coordinate type of the x-axis (RA---TAN).
+    - CTYPE2: The coordinate type of the y-axis (DEC--TAN).
+    - CDELTi: The pixel size of dimension 1 and 2 in degress
+    - PCi_j: Elements of the pixel scale matrix for converting from pixel coordinates to sky coordinates.
+
+    The PC matrix accounts for the mirror flip of the y-axis pixel coordinate (East<-West), thus 
+    the PC matrix is a product of a pure rotation and a mirror flip of the second y-axis.
+
+    The WCS object is created using the FITS header and returned.
+    """
+    hdr = fits.Header()
+    hdr["NAXIS1"] = pixels
+    hdr["NAXIS2"] = pixels
+    hdr["CRVAL1"] = skycoord.ra.to(units.deg).value
+    hdr["CRVAL2"] = skycoord.dec.to(units.deg).value
+    hdr["CRPIX1"] = pixels/2 - 0.5 # Same convention as Cutout2D
+    hdr["CRPIX2"] = pixels/2 - 0.5
+    hdr["CUNIT1"] = 'deg'
+    hdr["CUNIT2"] = 'deg'
+    hdr["CTYPE1"] = "RA---TAN"
+    hdr["CTYPE2"] = "DEC--TAN"
+    # hdr["CDELT1"] = pixel_size.to(units.deg).value
+    # hdr["CDELT2"] = pixel_size.to(units.deg).value
+    hdr["CDELT1"] = 1.
+    hdr["CDELT2"] = 1.
+    cdelt = pixel_size.to(units.deg).value
     
-    # # Collect PC matrix of each WCS (hopefully we deal with square pixel, otherwise math breaks I think)
-    # if fiducial_pc is None:
-        # fiducial_pc = torch.tensor(wcs_list[0].pixel_scale_matrix).to(DEVICE)
+    theta = orientation * np.pi / 180
+    rotation = np.array([[np.cos(theta), -np.sin(theta)], 
+                         [np.sin(theta), np.cos(theta)]])
+    mirror_j = np.array([[1, 0], [0, -1]])
+    pc = cdelt * rotation @ mirror_j
+    hdr["PC1_1"] = pc[0, 0]
+    hdr["PC1_2"] = pc[0, 1]
+    hdr["PC2_1"] = pc[1, 0]
+    hdr["PC2_2"] = pc[1, 1]
+    return WCS(hdr)
+    
+def make_forward_model(
+        psf:np.ndarray, 
+        wcs_list:list[WCS, ...], 
+        super_sampling_factor:int,
+        model_pixels:int,
+        model_pixel_size:units.Quantity,
+        zero_padding:int=0,
+        fiducial_center:SkyCoord=None,
+        fiducial_orientation:float=None, # Pick the orientation of the first WCS, angle East of North
+        **kwargs
+        ):
+    """
+    Create a forward model for a given point spread function (PSF) and a list of world coordinate systems (WCS).
+
+    Parameters:
+    -----------
+    psf : np.ndarray
+        The point spread function (PSF) to be used for the forward model. It should be a 2D or 3D array (multi channel fit).
+
+    wcs_list : list[WCS, ...]
+        A list of world coordinate systems (astropy WCS) to be used for the forward model. 
+
+    super_sampling_factor : int
+        The super sampling factor to be used for the forward model. It determines the level of detail in the model.
+
+    model_pixels : int
+        The number of pixels to be used for the model pixel grid.
+
+    model_pixel_size : units.Quantity
+        The size of each pixel in the model pixel grid. It should be an instance of the units.Quantity class.
+
+    zero_padding : int, optional
+        The number of zero padding pixels to be added to the model pixel grid on each side. Default is 0.
+
+    fiducial_center : SkyCoord, optional
+        The fiducial center to be used for the model reference pixel. It should be an instance of the SkyCoord class. 
+        Default (None) is to use first WCS center pixel world coordinate.
         
-    # observation_pcs = []
-    # for wcs in wcs_list:
-        # observation_pcs.append(torch.tensor(wcs.pixel_scale_matrix).to(DEVICE))
+    fiducial_orientation : float, optional
+        The fiducial orientation to be used for model pixel grid. The angle is defined East of North. 
+        Default (None) is to use first WCS pixel scale matrix orientation.
+
+    Returns:
+    --------
+    forward_model : np.ndarray
+        The created forward model as a 2D array.
+
+    Examples:
+    ---------
+    >>> psf = np.ones((5, 5))
+    >>> wcs_list = [WCS(), WCS()]
+    >>> super_sampling_factor = 2
+    >>> model_pixels = 10
+    >>> model_pixel_size = units.Quantity(0.1, 'arcsec')
+    >>> forward_model = make_forward_model(psf, wcs_list, super_sampling_factor, model_pixels, model_pixel_size)
+    """
+    if psf.ndim == 2:
+        C = 1
+        H, W = psf.shape
+    elif psf.ndim == 3:
+        C, H, W = psf.shape
+    psf = torch.tensor(psf).float().to(DEVICE).view(C, 1, H, W) # reshape to a convolution kernel [channel_out, channels_in/groups, H, W]
+    batched_interpolation = vmap(interpolate, in_dims=(0, None))  # only batch over the images (first argument of interpolate)
     
-    # Observation coordinate system 
-    observation_fov = args.observation_pixel_size * args.observation_pixels
-    theta = torch.linspace(-1, 1, args.super_sampling_factor*args.observation_pixels).float() * observation_fov / 2
-    thx, thy = torch.meshgrid(theta, theta, indexing="xy")
-    # Leftmost pixel coordinate in model grid (+0.5 to center coordinates on pixel centers)
-    _min = - args.model_pixel_size * (args.model_pixels + args.zero_padding) / 2 + 0.5 * args.model_pixel_size
+    if fiducial_center is None:
+        # Use same convention as Cutout2D for reference pixel
+        center = [dim / 2 - 0.5 for dim in wcs_list[0].pixel_shape]
+        fiducial_center = wcs_list[0].pixel_to_world(*center)
+    if fiducial_orientation is None:
+        pc = wcs_list[0].pixel_scale_matrix
+        fiducial_orientation = np.arctan2(pc[1, 0], pc[0, 0]) * 180 / np.pi
+    fiducial_wcs = make_wcs(fiducial_center, fiducial_orientation, model_pixels, model_pixel_size)
+    print(fiducial_wcs)
+
+    # Prepare coordinate systems
+    model_coordinates_list = []
+    for wcs in wcs_list:
+        # Observation pixel coordinates super sampled
+        u = (np.arange(super_sampling_factor * wcs.pixel_shape[0]) + 0.5) / super_sampling_factor 
+        v = (np.arange(super_sampling_factor * wcs.pixel_shape[1]) + 0.5) / super_sampling_factor 
+        # v = np.flip(v) # Remember matrix convention for pixel indexing
+        u, v = np.meshgrid(u, v, indexing="ij")
+        world = wcs.pixel_to_world(u, v)
+        model_coordinates = np.stack(fiducial_wcs.world_to_pixel(world), axis=0)
+        model_coordinates_list.append(torch.tensor(model_coordinates).float().to(DEVICE))
+    
     def A(x):
-        x = F.pad(x, pad=[args.zero_padding]*4, mode="constant", value=0.)
+        x = F.pad(x, pad=[zero_padding]*4, mode="constant", value=0.)
         ys = []
         for i in range(len(wcs_list)):
-            # minus sign on y_shift since we move the observation window, not the model
-            y_shift = -(observation_centers[i].dec - fiducial_center.dec).to(u.arcsec).value # South -> North
-            x_shift = (observation_centers[i].ra - fiducial_center.ra).to(u.arcsec).value # East <- West (hence cancel the minus sign)
-            # Potential code for hanlding rotation
-            # R = fiducial_pc @ observation_pcs[i].T
-            # Transform angular coordinates into model pixel coordinates (shift then rotate)
-            # beta_y = matmul(R, thy - y_shift)
-            # beta_x = matmul(R, thx - x_shift)
-            # For now, only shift the coordinates
-            i_coord = (thy - y_shift - _min) / args.model_pixel_size
-            j_coord = (thx - x_shift - _min) / args.model_pixel_size
-            coordinates = torch.stack([i_coord, j_coord], dim=0).to(DEVICE)
-            y = batched_interpolation(x, coordinates)
+            y = batched_interpolation(x, model_coordinates_list[i])
             y = F.conv2d(y, psf, groups=C, padding="same")
-            y = F.avg_pool2d(y, kernel_size=args.super_sampling_factor, stride=args.super_sampling_factor)
+            y = F.avg_pool2d(y, kernel_size=super_sampling_factor, stride=super_sampling_factor)
             ys.append(y)
-        return torch.concat(ys, dim=1) # cat along channel dimension for now, will have to introduce an event dimension
+        return torch.concat(ys, dim=1)
     return A
 
 
 if __name__ == "__main__":
     from argparse import ArgumentParser
     import matplotlib.pyplot as plt
-    from astropy.wcs import WCS
     import numpy as np
+    
     parser = ArgumentParser()
-    parser.add_argument("--observation_pixels", default=4,    type=int,           help="Make a fake observation with this number of pixels on a side")
-    parser.add_argument("--observation_pixel_size", default=0.05, type=float,       help="Pixel size for the fake observation, in arcseconds")
-    parser.add_argument("--model_pixels",       default=8,     type=int,          help="Number of pixels on a side for the model")
-    parser.add_argument("--model_pixel_size",   default=0.05,    type=float,        help="Pixel size for the model")
-    parser.add_argument("--zero_padding",       default=0,      type=int,           help="Zero padding in the forward model. Default is no zero-padding")
-    parser.add_argument("--super_sampling_factor", default=2,   type=int,           help="Factor by which the PSF is super sampled. ")
+    parser.add_argument("--obs_pixels",            default=8,     type=int,           help="Number of pixels in the observartion")
+    parser.add_argument("--obs_pixel_size",        default=0.05,   type=float,         help="Pixel size of the observation")
+    parser.add_argument("--model_pixels",          default=16,     type=int,           help="Number of pixels on a side for the model")
+    parser.add_argument("--model_pixel_size",      default=0.025,   type=float,         help="Pixel size for the model")
+    parser.add_argument("--shift_east",            default=0,      type=float,         help="Pixel shift east")
+    parser.add_argument("--shift_north",           default=0,      type=float,         help="Pixel shift north")
+    parser.add_argument("--wcs_angle",             default=0,      type=float,         help="Orientation of the observation East of North (deg)")
+    parser.add_argument("--model_angle",           default=None,   type=float,         help="Orientation of the model East of North (deg)")
+    parser.add_argument("--zero_padding",          default=0,      type=int,           help="Zero padding in the forward model. Default is no zero-padding")
+    parser.add_argument("--super_sampling_factor", default=1,      type=int,           help="Factor by which the PSF is super sampled. ")
     args = parser.parse_args()
     """
     Test Rational:
@@ -97,131 +210,99 @@ if __name__ == "__main__":
 
         We move the window to match the observation. The signal does not move. This behavior match
         our telescope taking snapshots at different point relative to the fixed signal in space. 
-    
-    Mathematical details:
-        Suppose theta is a pixel coordinate in the observation grid, and beta a pixel in the model grid
-        We can relate theta and beta knowing a shift value:
-            beta' = theta - shift
-        
-        From our explanation above, the shift is defined in term of the observation window. Thus, we know 
-        from the WCS
-            shift_window = observation_center - fiducial_center
-        The equation for beta is written in term of the model pixel grid, thus
-            shift = -shift_window
-        The minus is changing our perspective from observation to model space for the interpolation.
-        
-        Once the coordinates are shifted, we can apply the rotation. Again, we start from the observation
-        perspective. The observation has a rotation matrix R_theta relative to the RA-DEC coordinate system. 
-        Similarly, the fiducial coordinate system has rotation matrix R_beta. Our goal is to transform theta into 
-        beta, so we take the shifted coordinates beta', derotate them from the observation coordinate system, 
-        and rerotate them into the fiducial coordinate system
-            beta = R_beta R_theta^T beta'
-        
-        The fact that we apply R_theta^T will indeed rotate our signal clockwise if R_beta is the identity.
-        
-        Caveat: We generally don't have a rotation matrix. We have a PC matrix. It might be possible to
-        get something close to R using
-        R = +/- PC / |PC|**(1/2)
-        (not sure about the sign) but overall it's a risky proposition. Need to read more in details.
-
-    Test 1:
-        x_shift = 0.1/3600 # signal move 2 pixels right 
-        y_shift = 0.1/3600 # signal moves 2 pixels down
-        angle = 0
-
-    Test 2:
-        x_shift = 0/3600 
-        y_shift = 0/3600 
-        angle = 90 # signal will rotate 90 degrees West of North
-        
-    Test 3:
-        x_shift = 0.1/3600 
-        y_shift = 0.1/3600 
-        angle = 90 
-        
     """
+    
     # Test 1 (im is the model, or signal)
-    im = torch.ones([8, 8])
+    pix = args.model_pixels
+    # im = torch.ones([pix, pix])
+    im = torch.arange(pix)
+    _, im = torch.meshgrid(im, im)
+    vmax = im.max()
+    vmin = 0.
     psf = torch.ones([1, 1, 1])
     
+    fig = plt.figure()
+    ax = plt.gca()
+    ax.set_title("Model")
+    ax.imshow(im, vmin=vmin, vmax=vmax, origin="lower")
+    
     # reference WCS
-    w = WCS(naxis=2) 
-    w.wcs.crpix = [4, 4]
-    w.wcs.crval = [1., 1.]
-    w.wcs.cdelt = np.array([0.05, 0.05])
-    w.wcs.ctype = ['RA---TAN', 'DEC--TAN']
+    center = SkyCoord(ra=10*units.deg, dec=20*units.deg)
+    w = make_wcs(center, 0., args.obs_pixels, pixel_size=args.obs_pixel_size * units.arcsec)
+    hdr = w.to_header()
+    # NAXIS is not populated in the to header method
+    hdr["NAXIS1"] = w.pixel_shape[0]
+    hdr["NAXIS2"] = w.pixel_shape[1]
+    # Option 1 (Connor's targets)
+    hdr["CDELT1"] = 1
+    hdr["CDELT2"] = 1
+    PC = np.array([[ 2.95622685e-06,  1.33975477e-05],
+                   [ 1.33618318e-05, -1.72226071e-06]])
+    # Option 2 (SMACS), specify CDELT and leave PC as rotation @ mirror_j
+    # hdr["CDELT1"] = 0.05/3600
+    # hdr["CDELT2"] = 0.05/3600
+    # PC = np.array([[ 0.81783584,  0.57545159],
+                   # [ 0.57545159, -0.81783584]])
+    hdr["PC1_1"] = PC[0, 0]
+    hdr["PC1_2"] = PC[0, 1]
+    hdr["PC2_1"] = PC[1, 0]
+    hdr["PC2_2"] = PC[1, 1]
+    w = WCS(hdr)
     print(w)
-    # shifted wcs
-    w1 = WCS(naxis=2) 
-    w1.wcs.crpix = [4, 4]
-    shift = 0.1 / 3600 # divides by 3600 since I convert units to arcsec in the forward model
-    w1.wcs.crval = [1. + shift, 1. + shift]
-    w1.wcs.cdelt = np.array([0.05, 0.05])
-    w1.wcs.ctype = ['RA---TAN',  'DEC--TAN']
+    
+    # shifted and rotated wcs
+    theta = args.wcs_angle * np.pi / 180 
+    R = np.array([[np.cos(theta), -np.sin(theta)],
+                  [np.sin(theta),  np.cos(theta)]])
+    PC = w.wcs.pc
+    # This product does not commute because PC is not a pure rotation
+    # PC contains a mirror transformation, to map pixel to coordinates 
+    # Applying rotation first gives us the expected behavior
+    PC = PC @ R
+    hdr = w.to_header()
+    # NAXIS is not populated in the to header method
+    hdr["NAXIS1"] = w.pixel_shape[0]
+    hdr["NAXIS2"] = w.pixel_shape[1]
+    # Changig the CRPIX this way undo the observed shift as it should
+    # hdr["CRPIX1"] += args.shift_north
+    # hdr["CRPIX2"] += args.shift_east
+    # Shift the world coordinate of the observation
+    hdr["CRVAL1"] += args.shift_east * args.obs_pixel_size / 3600
+    hdr["CRVAL2"] += args.shift_north * args.obs_pixel_size / 3600
+    hdr["PC1_1"] = PC[0, 0]
+    hdr["PC1_2"] = PC[0, 1]
+    hdr["PC2_1"] = PC[1, 0]
+    hdr["PC2_2"] = PC[1, 1]
+    w1 = WCS(hdr) 
     print(w1)
     
     wcs_list = [w, w1]
-    A = make_forward_model(args, psf, wcs_list)
+    model_pixels = args.model_pixels
+    model_pixel_size = args.model_pixel_size * units.arcsec
+    A = make_forward_model(
+            psf, 
+            wcs_list, 
+            super_sampling_factor=args.super_sampling_factor,
+            model_pixels=model_pixels,
+            model_pixel_size=model_pixel_size,
+            fiducial_orientation=args.model_angle
+            )
     y_hat = A(im[None, None])
    
     fig = plt.figure()
     ax = plt.gca()
     im = y_hat[0, 0]
     ax.set_title("Test 1 Fiducial")
-    ax.imshow(im, vmin=-1, vmax=1, origin="lower")
+    ax.imshow(im, vmin=vmin, vmax=vmax, origin="lower")
     for (i, j), z in np.ndenumerate(im):
-        ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center') 
+        ax.text(j, i, '{:0.0f}'.format(z), ha='center', va='center') 
     
     fig =plt.figure()
     ax = plt.gca()
     im = y_hat[0, 1]
     ax.set_title("Test 1 Shifted")
-    ax.imshow(im, vmin=-1, vmax=1, origin="lower")
+    ax.imshow(im, vmin=vmin, vmax=vmax, origin="lower")
     for (i, j), z in np.ndenumerate(im):
-        ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center') 
-
-    # # Test 2
-    # im = torch.linspace(-1, 1, 8)
-    # im, _ = toch.meshgrid(im, im)
-    # psf = torch.ones([1, 1, 1])
-    
-    # # rotated wcs
-    # w1 = WCS(naxis=2) 
-    # w1.wcs.crpix = [4, 4]
-    # shift = 0 / 3600 # divides by 3600 since I convert units to arcsec in the forward model
-    # w1.wcs.crval = [1. + shift, 1. + shift]
-    # w1.wcs.cdelt = np.array([0.05, 0.05])
-    # # Easy case, PC is a simple rotation of 90 degrees
-    # PC = np.array([[1, 0],[0, 1]])
-    # R = np.array([[0, -1], [1, 0]])
-    # PC = R @ PC @ R.T
-    # w1.wcs.pc = PC
-    # w1.wcs.ctype = ['RA---TAN',  'DEC--TAN']
-    # print(w1)
-    
-    # wcs_list = [w, w1]
-    # A = make_forward_model(args, psf, wcs_list)
-    # y_hat = A(im[None, None])
-   
-    # fig = plt.figure()
-    # ax = plt.gca()
-    # im = y_hat[0, 0]
-    # ax.set_title("Test 1 Fiducial")
-    # ax.imshow(im, vmin=-1, vmax=1, origin="lower")
-    # for (i, j), z in np.ndenumerate(im):
-        # ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center') 
-    
-    # fig =plt.figure()
-    # ax = plt.gca()
-    # im = y_hat[0, 1]
-    # ax.set_title("Test 1 Shifted")
-    # ax.imshow(im, vmin=-1, vmax=1, origin="lower")
-    # for (i, j), z in np.ndenumerate(im):
-        # ax.text(j, i, '{:0.1f}'.format(z), ha='center', va='center') 
-    
+        ax.text(j, i, '{:0.0f}'.format(z), ha='center', va='center') 
     plt.show()
 
-
-    # we will need to deal with this case
-    # PC = array([[ 2.80967349e-06,  1.38453711e-05],
-       # [ 1.35581156e-05, -1.88708320e-06]]))

@@ -20,7 +20,6 @@ python $DEBLENDER/scripts/train_score_model.py\
   --learning_rate=2e-5\
   --max_time=70\
   --batch_size=4\
-  --logdir=$DEBLENDER/logs/\
   --logname_prefixe=ncsnpp_skirt_i_256\
   --model_dir=$DEBLENDER/models/\
   --checkpoints=10\
