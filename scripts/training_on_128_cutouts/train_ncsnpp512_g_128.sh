@@ -14,12 +14,11 @@ python $DEBLENDER/scripts/train_score_model.py\
   --dataset_path=$SLURM_TMPDIR/skirt128_grizy.h5\
   --dataset_channels 0\
   --dataset_key=images\
-  --model_parameters=$DEBLENDER/scripts/training_on_128_cutouts/ncsnpplog_skirt512_single_channel_128.json\
+  --model_parameters=$DEBLENDER/scripts/training_on_128_cutouts/ncsnpp_skirt512_128.json\
   --epochs=10000\
   --learning_rate=2e-5\
   --max_time=70\
   --batch_size=4\
-  --logdir=$DEBLENDER/logs/\
   --logname_prefixe=ncsnpp_skirt_g_128\
   --model_dir=$DEBLENDER/models/\
   --checkpoints=10\
