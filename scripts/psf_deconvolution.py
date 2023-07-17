@@ -76,7 +76,7 @@ def main(args):
             coord = SkyCoord(args.fiducial_ra, args.fiducial_dec, unit=(units.hourangle, units.deg))
         else:
             coord = None
-        print(f"Building forward model with {observtion.shape[1]:d} exposures")
+        print(f"Building forward model with {observation.shape[1]:d} exposures")
         forward_model = make_forward_model(
                 psf, 
                 wcs_list, 
