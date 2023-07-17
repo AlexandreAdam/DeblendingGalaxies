@@ -162,7 +162,7 @@ def main(args):
             O = observation.shape[1]
             y_hat, vjpfunc = vjp(lambda x: forward_model(link_function(x)), x)
             # Compute residuals for each observation and concatenate in batch dimension for SLIC
-            residuals = (observations - y_hat).view(B*O, 1, observation_pixels, observation_pixels)
+            residuals = (observation - y_hat).view(B*O, 1, observation_pixels, observation_pixels)
             tiled_t = torch.tile(t, [O])
             slic_score = slic_model.score(t=tiled_t, x=residuals)
             # reshape slic score to be isomorph to cotangent space of the forward model
