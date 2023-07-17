@@ -1,12 +1,12 @@
 from score_models import ScoreModel
 from torch.func import vmap, grad, vjp
-import astropy.units as units
 from torchvision.transforms import CenterCrop
 from definitions import DEVICE, linear_preprocessing
 from forward_model import make_forward_model
 from forward_model_old import make_forward_model_old
 from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
+from astropy import units
 import numpy as np
 import torch
 import os
@@ -73,7 +73,7 @@ def main(args):
         if args.fiducial_ra is not None:
             assert args.fiducial_dec is not None, "If RA is provided, so must be DEC"
             print(f"Specifying fiducial center coordinate for the model at {args.fiducial_ra}, {args.fiducial_dec}")
-            coord = SkyCoord(args.fiducial_ra, args.fiducial_dec, units=(units.hourangle, units.deg))
+            coord = SkyCoord(args.fiducial_ra, args.fiducial_dec, unit=(units.hourangle, units.deg))
         else:
             coord = None
         print(f"Building forward model with {observtion.shape[1]:d} exposures")
