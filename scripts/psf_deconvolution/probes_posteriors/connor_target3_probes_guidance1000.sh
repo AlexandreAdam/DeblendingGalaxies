@@ -19,8 +19,8 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --super_sampling_factor=4\
   --model_pixels=256\
   --model_pixel_size=0.0125\
-  --fidcuial_ra="9:57:49.1102"\
-  --fidcual_dec="2:28:19.430"\
+  --fiducial_ra="9:57:49.1102"\
+  --fiducial_dec="2:28:19.430"\
   --super_sampling_factor=4\
   --slic_likelihood\
   --slic_model=$DEBLENDER/models/ncsnpp_hst_noise_psf_f814w_wfc3uv_230603210517\
