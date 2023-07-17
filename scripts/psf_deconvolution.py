@@ -1,6 +1,5 @@
-from score_models import ScoreModel, NCSNpp
-from functorch import grad, vmap, vjp
-from torch.nn import functional as F
+from score_models import ScoreModel
+from torch.func import vmap, grad, vjp
 import astropy.units as units
 from torchvision.transforms import CenterCrop
 from definitions import DEVICE, linear_preprocessing
