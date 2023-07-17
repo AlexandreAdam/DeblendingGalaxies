@@ -6,6 +6,7 @@ from definitions import DEVICE, linear_preprocessing
 from forward_model import make_forward_model
 from forward_model_old import make_forward_model_old
 from astropy.wcs import WCS
+from astropy.coordinates import SkyCoord
 import numpy as np
 import torch
 import os
