@@ -19,6 +19,7 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --super_sampling_factor=4\
   --model_pixels=256\
   --model_pixel_size=0.0125\
+  --probes\
   --fiducial_ra="9:57:46.8867"\
   --fiducial_dec="2:28:22.735"\
   --super_sampling_factor=4\
@@ -26,7 +27,7 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --slic_model=$DEBLENDER/models/ncsnpp_hst_noise_psf_f814w_wfc3uv_230603210517\
   --slic_guidance_factor=50\
   --result_dir=$DEBLENDER/results/\
-  --prior_model=$HOME/projects/rrg-lplevass/data/score_models/ncsnpp_ct_g_220912024942\
+  --prior_model=$DEBLENDER/models/ncsnpp_ct_g_220912024942\
   -N=2000\
   -W=100\
   -B=10\
