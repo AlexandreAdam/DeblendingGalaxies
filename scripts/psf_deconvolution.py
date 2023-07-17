@@ -105,16 +105,15 @@ def main(args):
         if args.downsample > 0:
             print(f"Downsampling {args.downsample} times")
             reference_profile = torch.nn.functional.avg_pool2d(reference_profile, kernel_size=2 * args.downsample, stride=2 * args.downsample)
-            
+
         if args.probes:
             print("Using Probes preprocessing of the g channel")
             reference_profile = preprocess_probes_g_channel(reference_profile)
-            link_function = probes_link_function
             
         else:
             print("Using SKIRT linear preprocessing (basically no preprocessing)")
             reference_profile = linear_preprocessing(reference_profile)
-            link_function = skirt_link_function
+            
         
         print("Building old forward model with specified argument for simulation")
         forward_model = make_forward_model_old(args, psf)
@@ -135,11 +134,19 @@ def main(args):
             print(f"Adding Gaussian noise with rms = {args.noise_rms} to the observation")
             observation += torch.randn_like(observation) * args.noise_rms
 
+    if args.probes:
+        print("Using probes link function")
+        link_function = probes_link_function
+        
+    else:
+        print("Not using any link function")
+        link_function = lambda x: x
+
     if args.diagonal_gaussian_likelihood:
         print("Using Gaussian Likelihood for inference")
         def convolved_likelihood(t, x, sigma_n=args.noise_rms):
             var = sigma_n**2 + sigma(t)**2
-            y_hat = forward_model(x[None])
+            y_hat = forward_model(link_function(x[None]))
             ll = torch.sum(-0.5 * torch.square(observation - y_hat) / var)
             return ll
         convolved_likelihood_gradient = vmap(grad(convolved_likelihood, argnums=0))  # now take in batched inputs and return score
