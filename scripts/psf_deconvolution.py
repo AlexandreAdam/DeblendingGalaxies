@@ -41,8 +41,6 @@ def main(args):
     if args.seed is not None:
         np.random.seed(args.seed)
         torch.manual_seed(args.seed)
-    if len(args.dataset_channels) > 1:
-        raise ValueError("Only single channel for now, until the script is tested for more")
     
     # Load model
     prior_model = ScoreModel(checkpoint_directory=args.prior_model)
@@ -83,6 +81,8 @@ def main(args):
 
     elif args.injection_test:
         print("Injection test ...")
+        if len(args.dataset_channels) > 1:
+            raise ValueError("Only single channel for now, until the script is tested for more")
         if args.dataset_channels_last:
             print("Using channels last format to read dataset")
             with h5py.File(args.dataset_path, "r") as hf:
@@ -245,7 +245,7 @@ if __name__ == '__main__':
     parser.add_argument("--dataset_path",      default=None,                        help="Path to the h5 files with reference profiles for the injection test")
     parser.add_argument("--dataset_key",       default="images",                    help="Key to the reference profile in the dataset")
     parser.add_argument("--dataset_id",        default=None,    type=int,           help="Index for the reference profile to recover")
-    parser.add_argument("--dataset_channels",   nargs="+", default=0, type=int,     help="Channels of the dataset to use. ")
+    parser.add_argument("--dataset_channels",   nargs="+", default=[0,], type=int,     help="Channels of the dataset to use. ")
     parser.add_argument("--dataset_channels_last", action="store_true",             help="If provided, then the channels of the dataset are found in the last dimension.")
     parser.add_argument("--observation_pixels", default=128,    type=int,           help="Make a fake observation with this number of pixels on a side")
     parser.add_argument("--observation_pixel_size", default=0.05, type=float,       help="Pixel size for the fake observation, in arcseconds")
