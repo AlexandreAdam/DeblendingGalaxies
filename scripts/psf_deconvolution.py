@@ -205,7 +205,7 @@ def main(args):
         # hf["observation"].attrs["pixel_size"] = 'micro Jy'
         hf["psf"] = psf.astype(np.float32).squeeze()
         hf.create_dataset("model", [args.walkers, 1, args.model_pixels, args.model_pixels], dtype=np.float32)
-        hf.create_dataset("reconstruction", [args.walkers, 1, args.observation_pixels, args.observation_pixels], dtype=np.float32)
+        hf.create_dataset("reconstruction", [args.walkers, observation.shape[1], args.observation_pixels, args.observation_pixels], dtype=np.float32)
         hf["model"].attrs["posterior_sample"] = not args.from_prior
         for n in range(args.walkers // args.batch_size):
             with torch.no_grad():
