@@ -1,4 +1,4 @@
-from score_models import DDPM, NCSNpp
+from score_models import ScoreModel, NCSNpp, DDPM
 from torch.utils.data import DataLoader
 from torch.func import vjp
 from datetime import datetime
@@ -98,12 +98,13 @@ def main(args):
 
     # Define the architecture of the SLIC model
     if args.model_architecture.lower() == "ddpm":
-        model = torch.nn.DataParallel(DDPM(**hyperparameters).to(DEVICE), device_ids=list(range(torch.cuda.device_count())))
+        net = DDPM(**hyperparameters).to(DEVICE)
     elif args.model_architecture.lower() == "ncsnpp":
-        model = torch.nn.DataParallel(NCSNpp(**hyperparameters).to(DEVICE), device_ids=list(range(torch.cuda.device_count())))
+        net = NCSNpp(**hyperparameters).to(DEVICE)
     else:
         raise ValueError
 
+    model = ScoreModel(net, sigma_min=sigma_min, sigma_max=sigma_max)
     dataset = Dataset(args.dataset_path, device=DEVICE)
     dataset = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
@@ -120,13 +121,14 @@ def main(args):
         """
         B = x.shape[0]
         t = torch.rand(B).to(DEVICE)
-        _, sigma = model.module.sde.marginal_prob(None, t)
+        mu, sigma = model.sde.marginal_prob_scalars(t, x)
+        mu, sigma = mu.view(B, 1, 1, 1), sigma.view(B, 1, 1, 1)
         z = forward_model(torch.randn([B, 1, args.model_pixels, args.model_pixels]).to(DEVICE)) # noise propagated through forward model
-        perturbed_x = x + sigma.view(B, 1, 1, 1) * z
+        perturbed_x = mu * x + sigma * z
         if args.loss.lower() == "ssm":
-            return sliced_score_matching_loss(score_fn=lambda x: model.score(x, t), samples=perturbed_x, noise_type=args.hutchinson_noise_type)
+            return sliced_score_matching_loss(score_fn=lambda x: model(t, x), samples=perturbed_x, noise_type=args.hutchinson_noise_type)
         elif args.loss.lower() == "dsm":
-            return torch.sum((z + model(x=perturbed_x, t=t))**2) / B
+            return torch.sum((z + sigma * model(t, perturbed_x))**2) / B
 
     # ==== Take care of where to write logs and stuff =================================================================
     if args.model_id.lower() != "none":
@@ -156,12 +158,12 @@ def main(args):
         scores = [float(re.findall('([0-9]{1}.[0-9]+e[+-][0-9]{2})', os.path.split(path)[-1])[-1]) for path in paths]
         if args.model_id.lower() != "none" and checkpoints != []:
             if args.model_checkpoint is not None:
-                model.module.load_state_dict(torch.load(paths[checkpoints == args.model_checkpoint], map_location=DEVICE))
+                model.load_state_dict(torch.load(paths[checkpoints == args.model_checkpoint], map_location=DEVICE))
                 optimizer.load_state_dict(torch.load(opt_paths[checkpoints == args.model_checkpoint], map_location=DEVICE))
                 print(f"Loaded checkpoint {args.model_checkpoint} of {args.model_id}")
                 lastest_checkpoint = args.model_checkpoint
             else:
-                model.module.load_state_dict(torch.load(paths[np.argmax(checkpoints)], map_location=DEVICE))
+                model.load_state_dict(torch.load(paths[np.argmax(checkpoints)], map_location=DEVICE))
                 optimizer.load_state_dict(torch.load(opt_paths[np.argmax(checkpoints)], map_location=DEVICE))
                 print(f"Loaded checkpoint {max(checkpoints)} of {args.model_id}")
                 lastest_checkpoint = max(checkpoints)
@@ -225,8 +227,7 @@ def main(args):
                 with open(os.path.join(checkpoints_dir, "score_sheet.txt"), mode="a") as f:
                     f.write(f"{lastest_checkpoint} {cost}\n")
                 with ema.average_parameters():  # save EMA parameters
-                    # Use model.module to get the state dict from within the data parallel module
-                    torch.save(model.module.state_dict(), os.path.join(checkpoints_dir, f"checkpoint_{cost:.4e}_{lastest_checkpoint:03d}.pt"))
+                    torch.save(model.state_dict(), os.path.join(checkpoints_dir, f"checkpoint_{cost:.4e}_{lastest_checkpoint:03d}.pt"))
                 torch.save(optimizer.state_dict(), os.path.join(checkpoints_dir, f"optimizer_{cost:.4e}_{lastest_checkpoint:03d}.pt"))
                 checkpoints.append(lastest_checkpoint)
                 scores.append(cost)
