@@ -137,7 +137,7 @@ def main(args):
 
     if args.diagonal_gaussian_likelihood:
         print("Using Gaussian Likelihood for inference")
-        def convolved_likelihood(x, t, sigma_n=args.noise_rms):
+        def convolved_likelihood(t, x, sigma_n=args.noise_rms):
             var = sigma_n**2 + sigma(t)**2
             y_hat = forward_model(x[None])
             ll = torch.sum(-0.5 * torch.square(observation - y_hat) / var)
@@ -150,14 +150,14 @@ def main(args):
     elif args.slic_likelihood:
         print("Using SLIC likelihood for inference")
         slic_model = ScoreModel(checkpoints_directory=args.slic_model)
-        def convolved_likelihood_gradient(x, t):
+        def convolved_likelihood_gradient(t, x):
             B, *_ = x.shape
             O = observation.shape[1]
             y_hat, vjpfunc = vjp(lambda x: forward_model(link_function(x)), x)
             # Compute residuals for each observation and concatenate in batch dimension for SLIC
             residuals = (observations - y_hat).view(B*O, 1, observation_pixels, observation_pixels)
             tiled_t = torch.tile(t, [O])
-            slic_score = slic_model.score(residuals, tiled_t)
+            slic_score = slic_model.score(t=tiled_t, x=residuals)
             # reshape slic score to be isomorph to cotangent space of the forward model
             slic_score = slic_score.view(B, O, observation_pixels, observation_pixels) 
             score = -vjpfunc(slic_score)[0]  # don't forget the minus sign
@@ -165,22 +165,22 @@ def main(args):
     
     if args.from_prior:
         print("Prior sampling: ignoring the likelhood completely")
-        def score_fn(x, t):
+        def score_fn(t, x):
             B, *D = x.shape
-            prior_score = prior_model.score(x, t)
+            prior_score = prior_model.score(t, x)
             return prior_score
     else:
         print(f"Posterior sampling with guidance factor {args.slic_guidance_factor}")
         # Sample from the posterior
-        def score_fn(x, t):
+        def score_fn(t, x):
             B, *D = x.shape
-            prior_score = prior_model.score(x, t)
-            likelihood_score = convolved_likelihood_gradient(x, t)
+            prior_score = prior_model.score(t, x)
+            likelihood_score = convolved_likelihood_gradient(t, x)
             return prior_score + args.slic_guidance_factor * likelihood_score
 
     def euler_maruyama_step(x, t, dt):
         t += dt
-        x_mean = x - g(t) ** 2 * score_fn(x, t) * dt
+        x_mean = x - g(t) ** 2 * score_fn(t, x) * dt
         z = torch.randn_like(x)
         x = x_mean + g(t) * z * np.sqrt(-dt)
         return x_mean, x, t
