@@ -1,7 +1,6 @@
 from score_models import DDPM, NCSNpp
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
-from functorch import vjp
+from torch.func import vjp
 from datetime import datetime
 from tqdm import tqdm
 import time
@@ -12,7 +11,7 @@ import os
 from glob import glob
 import re
 from torch_ema import ExponentialMovingAverage
-from psf_deconvolution import make_forward_model
+from forward_model_old import make_forward_model
 from astropy.io import fits
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -140,9 +139,6 @@ def main(args):
         logdir = os.path.join(args.logdir, logname)
         if not os.path.isdir(logdir):
             os.mkdir(logdir)
-        writer = SummaryWriter(log_dir=logdir)
-    else:
-        writer = SummaryWriter()
     # ===== Make sure directory and checkpoint manager are created to save model ===================================
     if args.model_dir.lower() != "none":
         checkpoints_dir = os.path.join(args.model_dir, logname)
@@ -212,10 +208,7 @@ def main(args):
 
         time_per_step_epoch_mean /= len(dataset)
         cost /= len(dataset)
-        writer.add_scalar("MSE", cost, step)
-        print(f"epoch {epoch} | cost {cost:.3e} | time per step {time_per_step_epoch_mean:.2e} s")
 
-        writer.flush()
         if np.isnan(cost):
             print("Training broke the Universe")
             break
@@ -301,11 +294,11 @@ if __name__ == '__main__':
     parser.add_argument("--logname",            default=None,                       help="Overwrite name of the log with this argument")
     parser.add_argument("--logname_prefixe",    default="score_model",              help="If name of the log is not provided, this prefix is prepended to the date")
     parser.add_argument("--model_dir",          default="None",                     help="Path to the directory where to save models checkpoints.")
-    parser.add_argument("--checkpoints",        default=10, type=int,               help="Save a checkpoint of the models each {%} epoch.")
+    parser.add_argument("--checkpoints",        default=2, type=int,               help="Save a checkpoint of the models each {%} epoch.")
     parser.add_argument("--models_to_keep",     default=10, type=int,               help="Only keep 3 best model, on top of the last checkpoint")
 
     # Reproducibility params
-    parser.add_argument("--seed",               default=None, type=int,             help="Random seed for numpy and tensorflow.")
+    parser.add_argument("--seed",               default=None, type=int,             help="Random seed for numpy and torch")
 
     args = parser.parse_args()
     main(args)
