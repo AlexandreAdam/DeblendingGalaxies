@@ -4,11 +4,11 @@
 #SBATCH --cpus-per-task=1 # maximum cpu per task is 3.5 per gpus
 #SBATCH --gres=gpu:1
 #SBATCH --mem=32G			 # memory per node
-#SBATCH --time=00-05:00		# time (DD-HH:MM)
+#SBATCH --time=00-03:00		# time (DD-HH:MM)
 #SBATCH --account=rrg-lplevass
 #SBATCH --job-name=Deconvolution_target2_probes_alpha50
 #SBATCH --output=%x-%j.out
-source $HOME/environments/caustic/bin/activate
+source $HOME/environments/milex/bin/activate
 python $DEBLENDER/scripts/psf_deconvolution.py\
   --experiment_name=posterior_connor_target2_probes_g_prior_guidance50_N2000\
   --psf_fits=$DEBLENDER/data/F814w_WFC3UV_cropped_psf.fits\
