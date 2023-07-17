@@ -4,8 +4,8 @@ from torch.func import vmap
 from definitions import DEVICE
 from definitions import interpolate
 
-# Old, keep as reference (didn't account for sub pixel shift)
-def make_forward_model_old(args, psf):
+# Old, keep as reference (didn't account for sub pixel shift, but useful for training slic)
+def make_forward_model(args, psf):
     """
     Useful for injection test!! Since we don't care for WCS in those.
 
