@@ -126,7 +126,7 @@ def main(args):
         if args.loss.lower() == "ssm":
             return sliced_score_matching_loss(score_fn=lambda x: model.score(x, t), samples=perturbed_x, noise_type=args.hutchinson_noise_type)
         elif args.loss.lower() == "dsm":
-            return torch.sum((z + model(perturbed_x, t))**2) / B
+            return torch.sum((z + model(x=perturbed_x, t=t))**2) / B
 
     # ==== Take care of where to write logs and stuff =================================================================
     if args.model_id.lower() != "none":
