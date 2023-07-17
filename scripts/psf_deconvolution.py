@@ -80,7 +80,7 @@ def main(args):
         forward_model = make_forward_model(
                 psf, 
                 wcs_list, 
-                super_sampling_factor=super_sampling_factor,
+                super_sampling_factor=args.super_sampling_factor,
                 model_pixels=args.model_pixels,
                 model_pixel_size=args.model_pixel_size * units.arcsec,
                 fiducial_center=coord,
