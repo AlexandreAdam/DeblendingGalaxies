@@ -43,7 +43,7 @@ def main(args):
         torch.manual_seed(args.seed)
     
     # Load model
-    prior_model = ScoreModel(checkpoint_directory=args.prior_model)
+    prior_model = ScoreModel(checkpoints_directory=args.prior_model)
     # Hack the VESDE in the model for readability
     sde = prior_model.sde # .module is a hack to
     sigma_min = sde.sigma_min
@@ -141,7 +141,7 @@ def main(args):
     
     elif args.slic_likelihood:
         print("Using SLIC likelihood for inference")
-        slic_model = ScoreModel(checkpoint_directory=args.slic_model)
+        slic_model = ScoreModel(checkpoints_directory=args.slic_model)
         def convolved_likelihood_gradient(x, t):
             B, *_ = x.shape
             O = observation.shape[1]
