@@ -64,7 +64,7 @@ def main(args):
         data = fits.open(args.observation_fits)
         observation = np.stack([data[k] for k in args.observation_keys], axis=0)
         observation = torch.tensor(observation).float().to(DEVICE)[None] # [1, O, pix, pix]
-        wcs_list = [WCS(data[k].header, data) for for k in args.observation_keys]
+        wcs_list = [WCS(data[k].header, data) for k in args.observation_keys]
         if args.fiducial_ra is not None:
             assert args.fiducial_dec is not None, "If RA is provided, so must be DEC"
             print(f"Specifying fiducial center coordinate for the model at {args.fiducial_ra}, {args.fiducial_dec}")
