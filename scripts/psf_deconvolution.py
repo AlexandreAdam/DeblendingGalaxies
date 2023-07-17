@@ -65,7 +65,7 @@ def main(args):
     if args.real_data:
         print("Real data mode...")
         data = fits.open(args.observation_fits)
-        observation = np.stack([data[try_int(k)] for k in args.observation_keys], axis=0)
+        observation = np.stack([data[try_int(k)].data for k in args.observation_keys], axis=0)
         observation = torch.tensor(observation).float().to(DEVICE)[None] # [1, O, pix, pix]
         wcs_list = [WCS(data[try_int(k)].header, data) for k in args.observation_keys]
         if args.fiducial_ra is not None:
