@@ -1,9 +1,9 @@
-from score_models import NCSNpp
+from score_models import ScoreModel, NCSNpp
 from functorch import grad, vmap, vjp
 from torch.nn import functional as F
 import astropy.units as units
 from torchvision.transforms import CenterCrop
-from definitions import DEVICE, load_model, linear_preprocessing
+from definitions import DEVICE, linear_preprocessing
 from forward_model import make_forward_model
 from forward_model_old import make_forward_model_old
 import numpy as np
@@ -46,7 +46,7 @@ def main(args):
         raise ValueError("Only single channel for now, until the script is tested for more")
     
     # Load model
-    prior_model = load_model(args.prior_model, architecture=NCSNpp, data_parallel=False)
+    prior_model = ScoreModel(checkpoint_directory=args.prior_model)
     # Hack the VESDE in the model for readability
     sde = prior_model.sde # .module is a hack to
     sigma_min = sde.sigma_min
@@ -142,7 +142,7 @@ def main(args):
     
     elif args.slic_likelihood:
         print("Using SLIC likelihood for inference")
-        slic_model = load_model(args.slic_model, architecture=NCSNpp, data_parallel=False, model_checkpoint=args.model_checkpoint)
+        slic_model = ScoreModel(checkpoint_directory=args.slic_model)
         def convolved_likelihood_gradient(x, t):
             B, *_ = x.shape
             O = observation.shape[1]
@@ -160,14 +160,14 @@ def main(args):
         print("Prior sampling: ignoring the likelhood completely")
         def score_fn(x, t):
             B, *D = x.shape
-            prior_score = prior_model(x, t) / sigma(t)
+            prior_score = prior_model.score(x, t)
             return prior_score
     else:
         print(f"Posterior sampling with guidance factor {args.slic_guidance_factor}")
         # Sample from the posterior
         def score_fn(x, t):
             B, *D = x.shape
-            prior_score = prior_model(x, t) / sigma(t)
+            prior_score = prior_model.score(x, t)
             likelihood_score = convolved_likelihood_gradient(x, t)
             return prior_score + args.slic_guidance_factor * likelihood_score
 
