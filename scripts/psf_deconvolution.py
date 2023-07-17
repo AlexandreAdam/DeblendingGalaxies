@@ -159,14 +159,14 @@ def main(args):
         slic_model = ScoreModel(checkpoints_directory=args.slic_model)
         def convolved_likelihood_gradient(t, x):
             B, *_ = x.shape
-            O = observation.shape[1]
+            _, O, pix, _ = observation.shape
             y_hat, vjpfunc = vjp(lambda x: forward_model(link_function(x)), x)
             # Compute residuals for each observation and concatenate in batch dimension for SLIC
-            residuals = (observation - y_hat).view(B*O, 1, observation_pixels, observation_pixels)
+            residuals = (observation - y_hat).view(B*O, 1, pix, pix)
             tiled_t = torch.tile(t, [O])
             slic_score = slic_model.score(t=tiled_t, x=residuals)
             # reshape slic score to be isomorph to cotangent space of the forward model
-            slic_score = slic_score.view(B, O, observation_pixels, observation_pixels) 
+            slic_score = slic_score.view(B, O, pix, pix) 
             score = -vjpfunc(slic_score)[0]  # don't forget the minus sign
             return score
     
