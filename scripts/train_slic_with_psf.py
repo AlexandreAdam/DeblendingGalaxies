@@ -121,7 +121,7 @@ def main(args):
         """
         B = x.shape[0]
         t = torch.rand(B).to(DEVICE)
-        mu, sigma = model.sde.marginal_prob_scalars(t, x)
+        mu, sigma = model.sde.marginal_prob_scalars(t)
         mu, sigma = mu.view(B, 1, 1, 1), sigma.view(B, 1, 1, 1)
         z = forward_model(torch.randn([B, 1, args.model_pixels, args.model_pixels]).to(DEVICE)) # noise propagated through forward model
         perturbed_x = mu * x + sigma * z
