@@ -17,7 +17,7 @@ python $DEBLENDER/scripts/train_slic_with_psf.py\
   --learning_rate=5e-5\
   --max_time=70\
   --batch_size=32\
-  --logname_prefixe=ncsnpp_hst_noise_flat_field_psf_f814w_wfc3uv_ssf4\
+  --logname_prefixe=ncsnpp_hst_noise_flat_field_psf_f814w_wfc3uv_ssf1\
   --model_dir=$DEBLENDER/models/\
   --checkpoints=3\
   --seed=42\
@@ -26,7 +26,7 @@ python $DEBLENDER/scripts/train_slic_with_psf.py\
   --prior_model=$HOME/projects/rrg-lplevass/data/score_models/ncsnpp_ct_g_220912024942\
   --observation_pixels=64\
   --observation_pixel_size=0.05\
-  --model_pixels=256\
-  --model_pixel_size=0.0125\
+  --model_pixels=128\
+  --model_pixel_size=0.025\
   --zero_padding=0\
-  --super_sampling_factor=4\
+  --super_sampling_factor=2\
