@@ -8,37 +8,54 @@
 #SBATCH --account=rrg-lplevass
 #SBATCH --job-name=Deconvolution
 #SBATCH --output=%x-%j.out
+#source $HOME/environments/milex/bin/activate
 
-alpha_grid=(200 200 200 200 50 50 50 50)
-N_grid=(500 1000 2000 4000 500 1000 2000 4000)
-M_grid=(1 1 1 1 2 2 2 2)
-snr=1e-1
+alpha_grid=(50 100 200)
+N_grid=(1000 2000 2000)
+M_grid=($(seq 0 4 12))
+n_observations_grid=(1 2)
+snr_grid=(1e-2 1e-1 1e-1)
 
-alpha=${alpha_grid[$THIS_WORKER]}
-N=${N_grid[$THIS_WORKER]}
-M=${M[$THIS_WORKER]}
+# Maximum index in dataset used for TARP (to choose reference)
+max_index=10
+# number of posteriors to run for a given index in the grid
+len_posteriors=1000
 
-source $HOME/environments/milex/bin/activate
-python $DEBLENDER/scripts/psf_deconvolution.py\
-  --experiment_name="tarp_posterior_alpha$alpha_N$N"\
-  --psf_fits=$DEBLENDER/data/F814w_WFC3UV_cropped_psf.fits\
-  --psf_key=PRIMARY\
-  --injection_test\
-  --dataset_path=$HOME/projects/rrg-lplevass/data/probes.h5\
-  --dataset_channels 0\
-  --dataset_key=galaxies\
-  --dataset_id=468\
-  --dataset_channels_last\
-  --observation_pixels=128\
-  --observation_pixel_size=0.04\
-  --model_pixels=256\
-  --downsample=1\
-  --model_pixel_size=0.02\
-  --noise_rms=2e-2\
-  --super_sampling_factor=4\
-  --diagonal_gaussian_likelihood\
-  --result_dir=$DEBLENDER/results/\
-  --checkpoints_dir=$DEBLENDER/models/ncsnpp_ct_g_220912024942\
-  -N=4000\
-  -W=30\
-  -B=10\
+total=${#alpha_grid[@]}
+noise_index=0
+
+for ((i=0;i<total;i++))
+do
+    alpha=${alpha_grid[$i]}
+    N=${N_grid[$i]}
+    M=${M_grid[$i]}
+    n_obs=${n_observations_grid[$i]}
+    snr=${snr_grid[$i]}
+    echo "alpha: $alpha | N: $N | M: $M | n_obs: $n_obs | SNR: $snr"
+    image_index=$(($image_index+1))
+    #python $DEBLENDER/scripts/psf_deconvolution.py\
+      #--experiment_name=tarp_posterior_ref{$image_index}_alpha{$alpha}_N{$N}_M{$}_snr{$snr}_nobs{$n_obs}\
+      #--psf_fits=$DEBLENDER/data/F814w_WFC3UV_cropped_psf.fits\
+      #--psf_key=PRIMARY\
+      #--injection_test\
+      #--dataset_path=$HOME/projects/rrg-lplevass/data/probes.h5\
+      #--dataset_channels 0\
+      #--dataset_key=galaxies\
+      #--dataset_id=$image_index\
+      #--dataset_channels_last\
+      #--observation_pixels=128\
+      #--observation_pixel_size=0.04\
+      #--noise_map ${args[@]}\ #TODO give a number of those based on n_obs make sure args will match accross jobs for same reference (obs must stay the same for a given posterior)
+      #--model_pixels=256\
+      #--downsample=1\
+      #--model_pixel_size=0.02\
+      #--noise_rms=2e-2\
+      #--super_sampling_factor=4\
+      #--diagonal_gaussian_likelihood\
+      #--result_dir=$DEBLENDER/results/\
+      #--checkpoints_dir=$DEBLENDER/models/ncsnpp_ct_g_220912024942\
+      #-N=4000\
+      #-W=100\
+      #-B=50\
+done
+
