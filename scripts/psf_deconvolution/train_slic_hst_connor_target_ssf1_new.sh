@@ -17,7 +17,7 @@ python $DEBLENDER/scripts/train_slic_with_psf.py\
   --learning_rate=5e-5\
   --max_time=70\
   --batch_size=32\
-  --logname_prefixe=ncsnpp_hst_noise_flat_field_psf_f814w_wfc3uv_ssf1\
+  --logname_prefixe=ncsnpp_hst_noise_flat_field_psf_f814w_wfc3uv_ssf1_flux_lt_0.013\
   --model_dir=$DEBLENDER/models/\
   --checkpoints=3\
   --seed=42\
@@ -29,4 +29,4 @@ python $DEBLENDER/scripts/train_slic_with_psf.py\
   --model_pixels=64\
   --model_pixel_size=0.05\
   --zero_padding=0\
-  --super_sampling_factor=1\
+  --super_sampling_factor=4\

@@ -103,15 +103,13 @@ def main(args):
         if args.downsample > 0:
             print(f"Downsampling {args.downsample} times")
             reference_profile = torch.nn.functional.avg_pool2d(reference_profile, kernel_size=2 * args.downsample, stride=2 * args.downsample)
-
-        if args.probes:
-            print("Using Probes preprocessing of the g channel")
-            reference_profile = preprocess_probes_g_channel(reference_profile)
-            
-        else:
-            print("Using SKIRT linear preprocessing (basically no preprocessing)")
-            reference_profile = linear_preprocessing(reference_profile)
         
+        # wcs_list = [make_wcs() for]
+        # forward_model = make_forward_model(
+                # psf, 
+                # wcs_list, 
+                # super_sampling_factor=args.super_sampling_factor
+
         if args.slic_likelihood:
             print("Adding non-gaussian noise to the observation...")
             print(f"Loading noise map {args.noise_map} | id = {args.noise_indexex}")
@@ -269,7 +267,7 @@ if __name__ == '__main__':
     parser.add_argument("--slic_model_checkpoint",   default=None, type=int,        help="Index of the slic model checkpoint to load.")
     parser.add_argument("--slic_guidance_factor", default=1., type=float,   help="Balance likelihood and prior with this fudge factor.")
     parser.add_argument("--noise_map",           default=None)
-    parser.add_argument("--noise_indexes",       default=None, nargs="=", type=int,  help="Noise per observations")
+    parser.add_argument("--noise_indexes",       default=None, nargs="+", type=int,  help="Noise per observations")
 
     # Prior sampling mode, this will ignore everything about the data. Used for testing or generating training sets.
     parser.add_argument("--from_prior",         action="store_true",               help="Ignore the observation and sample from the prior")
@@ -278,9 +276,12 @@ if __name__ == '__main__':
     parser.add_argument("--prior_model",    required=True,                     help="Prior model checkoint path")
 
     # Samplers params
-    parser.add_argument("-N", "--em_iterations", required=True,  type=int,           help="Total number of Euler-Maruyama steps to perform")
+    parser.add_argument("-N", "--em_iterations", default=1000,  type=int,           help="Total number of Euler-Maruyama steps to perform")
     parser.add_argument("-W", "--walkers",       default=1,      type=int,           help="Number of independent samples to produce")
     parser.add_argument("-B", "--batch_size",    default=1,      type=int,           help="Batch size, number of samples to produce at a given moment")
+    parser.add_argument("-M", "--corrector_iterations",    default=0,      type=int, help="Number of corrector steps to do")
+    parser.add_argument("--corrector",            default="ULA",                     help="Either ULA, MALA or HMC")
+    parser.add_argument("--hmc_mass",             default=1.,         type=float,     help="Mass parameter for hmc")
 
     # Reproducibility params
     parser.add_argument("--seed",                default=None,   type=int,       help="Seed for the random number generators.")
