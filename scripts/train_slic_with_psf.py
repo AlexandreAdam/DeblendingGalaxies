@@ -65,6 +65,27 @@ class Dataset(torch.utils.data.Dataset):
         return torch.tensor(self.dataset[index]).float().to(self.device)[None]
 
 
+def random_crop(images, new_shape):
+    """
+    Performs a random crop on a batch of images.
+
+    Parameters:
+    images (torch.Tensor): a 4D tensor with shape [B, C, H, W]
+    new_shape (int): the desired height and width of the cropped images
+
+    Returns:
+    torch.Tensor: a 4D tensor with shape [B, C, new_shape, new_shape]
+    """
+    batch, channels, height, width = images.shape
+    start_x = torch.randint(0, width - new_shape, (batch, ), dtype=torch.long)
+    start_y = torch.randint(0, height - new_shape, (batch, ), dtype=torch.long)
+    
+    cropped_images = torch.empty((batch, channels, new_shape, new_shape), dtype=images.dtype, device=images.device)
+    for i, (img, x, y) in enumerate(zip(images, start_x, start_y)):
+        cropped_images[i] = img[:, y:y+new_shape, x:x+new_shape]
+
+    return cropped_images
+
 def main(args):
     if args.seed is not None:
         np.random.seed(args.seed)
@@ -186,6 +207,11 @@ def main(args):
         time_per_step_epoch_mean = 0
         cost = 0
         for batch, x in enumerate(dataset):
+            # Make sure noise vectors match observation space of the forward model
+            if x.shape[2] > args.observation_pixels:
+                x = random_crop(x, args.observation_pixels)
+            elif x.shape[2] < args.observation_pixels:
+                raise ValueError("Data is too small for the forward model considered")
             start = time.time()
             optimizer.zero_grad()
             loss = loss_fn(x)
