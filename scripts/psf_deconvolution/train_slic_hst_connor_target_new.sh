@@ -11,13 +11,13 @@ source $HOME/environments/milex/bin/activate
 python $DEBLENDER/scripts/train_slic_with_psf.py\
   --loss=dsm\
   --model_architecture=ncsnpp\
-  --dataset_path=$DEBLENDER/data/connor_targets_flat_fields_noise_cutouts.npy\
+  --dataset_path=$DEBLENDER/data/connor_targets_flat_fields_noise_cutouts_flux_lt_0.013.npy\
   --model_parameters=$DEBLENDER/scripts/psf_deconvolution/ncsnpp_hst_noise.json\
   --epochs=10000\
   --learning_rate=5e-5\
   --max_time=70\
   --batch_size=32\
-  --logname_prefixe=ncsnpp_hst_noise_flat_field_psf_f814w_wfc3uv_ssf1\
+  --logname_prefixe=ncsnpp_hst_noise_flat_field_psf_f814w_wfc3uv_ssf4\
   --model_dir=$DEBLENDER/models/\
   --checkpoints=3\
   --seed=42\
@@ -26,7 +26,7 @@ python $DEBLENDER/scripts/train_slic_with_psf.py\
   --prior_model=$HOME/projects/rrg-lplevass/data/score_models/ncsnpp_ct_g_220912024942\
   --observation_pixels=64\
   --observation_pixel_size=0.05\
-  --model_pixels=64\
-  --model_pixel_size=0.05\
+  --model_pixels=256\
+  --model_pixel_size=0.0125\
   --zero_padding=0\
-  --super_sampling_factor=1\
+  --super_sampling_factor=4\

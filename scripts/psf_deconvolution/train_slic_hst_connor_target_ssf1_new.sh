@@ -11,7 +11,7 @@ source $HOME/environments/milex/bin/activate
 python $DEBLENDER/scripts/train_slic_with_psf.py\
   --loss=dsm\
   --model_architecture=ncsnpp\
-  --dataset_path=$DEBLENDER/data/connor_targets_flat_fields_noise_cutouts.npy\
+  --dataset_path=$DEBLENDER/data/connor_targets_flat_fields_noise_cutouts_flux_lt_0.013.npy\
   --model_parameters=$DEBLENDER/scripts/psf_deconvolution/ncsnpp_hst_noise.json\
   --epochs=10000\
   --learning_rate=5e-5\

@@ -2,8 +2,7 @@ from score_models import ScoreModel
 from torch.func import vmap, grad, vjp
 from torchvision.transforms import CenterCrop
 from definitions import DEVICE, linear_preprocessing
-from forward_model import make_forward_model
-from forward_model_old import make_forward_model_old
+from forward_model import make_forward_model, make_wcs
 from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
 from astropy import units
@@ -28,7 +27,6 @@ def try_int(x):
         return int(x)
     except ValueError:
         return x
-
 
 def probes_link_function(x):
     return (x + 1) / 2.
@@ -113,26 +111,19 @@ def main(args):
         else:
             print("Using SKIRT linear preprocessing (basically no preprocessing)")
             reference_profile = linear_preprocessing(reference_profile)
-            
         
-        print("Building old forward model with specified argument for simulation")
-        forward_model = make_forward_model_old(args, psf)
-        print("Building fake observation (single exposure)")
-        observation = forward_model(link_function(reference_profile))
         if args.slic_likelihood:
             print("Adding non-gaussian noise to the observation...")
-            print(f"Loading noise map {args.noise_map} | id = {args.noise_index}")
-            noise = np.load(args.noise_map)[args.noise_index].astype(np.float32)
-            # with h5py.File(args.noise_map, "r") as hf:
-            #     noise = hf[args.noise_key][args.noise_index] # TODO support multiple channels
-            #     *_, H, W = noise.shape
-            noise = torch.tensor(noise).view(1, 1, *noise.shape).to(DEVICE)
+            print(f"Loading noise map {args.noise_map} | id = {args.noise_indexex}")
+            noise = np.load(args.noise_map)[args.noise_indexex].astype(np.float32)
+            noise = torch.tensor(noise).view(1, -1, *noise.shape).to(DEVICE)
             noise = CenterCrop(args.observation_pixels)(noise)
-            print(f"Using multiplicative factor {args.noise_map_multiplicative_factor} for adding noise map")
-            observation += args.noise_map_multiplicative_factor * noise
+            observation += noise
         else:
             print(f"Adding Gaussian noise with rms = {args.noise_rms} to the observation")
             observation += torch.randn_like(observation) * args.noise_rms
+    # forward_model = make_forward_model(args, psf)
+    # observation = forward_model(link_function(reference_profile))
 
     if args.probes:
         print("Using probes link function")
@@ -178,7 +169,6 @@ def main(args):
             return prior_score
     else:
         print(f"Posterior sampling with guidance factor {args.slic_guidance_factor}")
-        # Sample from the posterior
         def score_fn(t, x):
             B, *D = x.shape
             prior_score = prior_model.score(t, x)
@@ -199,6 +189,8 @@ def main(args):
     filename = os.path.join(args.result_dir, args.experiment_name + f"_{THIS_WORKER}" + ".h5")
     print("Solving the posterior...")
     with h5py.File(filename, "w") as hf:
+        if args.injection_test:
+            hf["reference"] = reference_profile.cpu().numpy().astype(np.float32).squeeze()
         hf["observation"] = observation.cpu().numpy().astype(np.float32).squeeze()
         # TODO add a bunch of relevant info here for reproducibility
         # hf["observation"].attrs["units"] = 'micro Jy'
@@ -277,8 +269,7 @@ if __name__ == '__main__':
     parser.add_argument("--slic_model_checkpoint",   default=None, type=int,        help="Index of the slic model checkpoint to load.")
     parser.add_argument("--slic_guidance_factor", default=1., type=float,   help="Balance likelihood and prior with this fudge factor.")
     parser.add_argument("--noise_map",           default=None)
-    parser.add_argument("--noise_index",         default=None, type=int)
-    parser.add_argument("--noise_map_multiplicative_factor", default=1., type=float, help="Multiply noise map by this factor, modifies noise amplitude")
+    parser.add_argument("--noise_indexes",       default=None, nargs="=", type=int,  help="Noise per observations")
 
     # Prior sampling mode, this will ignore everything about the data. Used for testing or generating training sets.
     parser.add_argument("--from_prior",         action="store_true",               help="Ignore the observation and sample from the prior")

@@ -26,7 +26,7 @@ python $DEBLENDER/scripts/train_slic_with_psf.py\
   --prior_model=$HOME/projects/rrg-lplevass/data/score_models/ncsnpp_ct_g_220912024942\
   --observation_pixels=64\
   --observation_pixel_size=0.05\
-  --model_pixels=64\
-  --model_pixel_size=0.05\
+  --model_pixels=128\
+  --model_pixel_size=0.025\
   --zero_padding=0\
-  --super_sampling_factor=1\
+  --super_sampling_factor=2\
