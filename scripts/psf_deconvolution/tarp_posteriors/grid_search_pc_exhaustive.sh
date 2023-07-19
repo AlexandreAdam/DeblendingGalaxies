@@ -6,8 +6,10 @@
 #SBATCH --mem=32G			 # memory per node
 #SBATCH --time=00-02:00		# time (DD-HH:MM)
 #SBATCH --account=rrg-lplevass
-#SBATCH --job-name=Deconvolution
+#SBATCH --job-name=Deconvolution_tarp
 #SBATCH --output=%x-%j.out
+
+source $HOME/environments/milex/bin/activate
 
 # Main setup
 #alpha_grid=(50 100 200)
