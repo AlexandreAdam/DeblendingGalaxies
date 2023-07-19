@@ -2,6 +2,7 @@ from score_models import ScoreModel
 from torch.func import vmap, grad, vjp
 from torchvision.transforms import CenterCrop
 from definitions import DEVICE, linear_preprocessing
+from correctors import ula_step, mala_step, hmc_step
 from forward_model import make_forward_model, make_wcs
 from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
@@ -166,26 +167,32 @@ def main(args):
     if args.from_prior:
         print("Prior sampling: ignoring the likelhood completely")
         def score_fn(t, x):
-            B, *D = x.shape
             prior_score = prior_model.score(t, x)
             return prior_score
     else:
         print(f"Posterior sampling with guidance factor {args.slic_guidance_factor}")
         def score_fn(t, x):
-            B, *D = x.shape
             prior_score = prior_model.score(t, x)
             likelihood_score = convolved_likelihood_gradient(t, x)
             return prior_score + args.slic_guidance_factor * likelihood_score
 
     def euler_maruyama_step(x, t, dt):
-        t += dt
         x_mean = x - g(t) ** 2 * score_fn(t, x) * dt
         z = torch.randn_like(x)
         x = x_mean + g(t) * z * np.sqrt(-dt)
+        t += dt
         return x_mean, x, t
     
-    # def langevin_corrector_step(x, t, snr):
-        
+    if args.corrector is None:
+        corrector = lambda x, epsilon, score_fn: x
+    elif args.corrector.upper() == "ULA":
+        corrector = lambda x, epsilon, score_fn: ula_step(x, epsilon, score_fn)
+    elif args.corrector.upper() == "MALA":
+        corrector = lambda x, epsilon, score_fn: mala_step(x, epsilon, score_fn, delta_logp_steps=args.delta_logp_steps)
+    elif args.corrector.upper() == "HMC":
+        corrector = lambda x, epsilon, score_fn: hmc_step(x, epsilon, score_fn, leapfrog_steps=args.leapfrog_steps, mass=args.mass)
+    else:
+        raise ValueError(f"Corrector {args.corrector} not implemented")
 
     # Now we do the hard work
     filename = os.path.join(args.result_dir, args.experiment_name + f"_{THIS_WORKER}" + ".h5")
@@ -194,9 +201,6 @@ def main(args):
         if args.injection_test:
             hf["reference"] = reference_profile.cpu().numpy().astype(np.float32).squeeze()
         hf["observation"] = observation.cpu().numpy().astype(np.float32).squeeze()
-        # TODO add a bunch of relevant info here for reproducibility
-        # hf["observation"].attrs["units"] = 'micro Jy'
-        # hf["observation"].attrs["pixel_size"] = 'micro Jy'
         hf["psf"] = psf.astype(np.float32).squeeze()
         hf.create_dataset("model", [args.walkers, 1, args.model_pixels, args.model_pixels], dtype=np.float32)
         hf.create_dataset("reconstruction", [args.walkers, *observation.shape[1:]], dtype=np.float32)
@@ -208,6 +212,10 @@ def main(args):
                 x = torch.randn(args.batch_size, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(t)
                 for _ in tqdm(range(args.em_iterations)):
                     x_mean, x, t = euler_maruyama_step(x, t, dt)
+                    if t[0] > args.corrector_tmin and t[0] > 0 and args.corrector is not None:
+                        for _ in range(args.corrector_iterations):
+                            epsilon = (args.snr * sigma(t))**2
+                            x = corrector(x, epsilon, score_fn)
             hf["model"][n * args.batch_size: (n+1) * args.batch_size] = link_function(x_mean).cpu().numpy().astype(np.float32)
             hf["reconstruction"][n * args.batch_size: (n+1) * args.batch_size] = forward_model(link_function(x_mean)).cpu().numpy().astype(np.float32)
 
@@ -218,6 +226,10 @@ def main(args):
                 x = torch.randn(args.walkers % args.batch_size, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(t)
                 for _ in tqdm(range(args.em_iterations)):
                     x_mean, x, t = euler_maruyama_step(x, t, dt)
+                    if t[0] > args.corrector_tmin and t[0] > 0 and args.corrector is not None:
+                        for _ in range(args.corrector_iterations):
+                            epsilon = (args.snr * sigma(t))**2
+                            x = corrector(x, epsilon, score_fn)
             hf["model"][(n+1) * args.batch_size:] = link_function(x_mean).cpu().numpy().astype(np.float32)
             hf["reconstruction"][(n+1) * args.batch_size:] = forward_model(link_function(x_mean)).cpu().numpy().astype(np.float32)
 
@@ -281,12 +293,16 @@ if __name__ == '__main__':
     parser.add_argument("--prior_model",    required=True,                     help="Prior model checkoint path")
 
     # Samplers params
-    parser.add_argument("-N", "--em_iterations", default=1000,  type=int,           help="Total number of Euler-Maruyama steps to perform")
-    parser.add_argument("-W", "--walkers",       default=1,      type=int,           help="Number of independent samples to produce")
-    parser.add_argument("-B", "--batch_size",    default=1,      type=int,           help="Batch size, number of samples to produce at a given moment")
-    parser.add_argument("-M", "--corrector_iterations",    default=0,      type=int, help="Number of corrector steps to do")
-    parser.add_argument("--corrector",            default="ULA",                     help="Either ULA, MALA or HMC")
-    parser.add_argument("--hmc_mass",             default=1.,         type=float,     help="Mass parameter for hmc")
+    parser.add_argument("-N", "--em_iterations", default=1000,  type=int,          help="Total number of Euler-Maruyama steps to perform")
+    parser.add_argument("-W", "--walkers",       default=1,     type=int,          help="Number of independent samples to produce")
+    parser.add_argument("-B", "--batch_size",    default=1,     type=int,          help="Batch size, number of samples to produce at a given moment")
+    parser.add_argument("-M", "--corrector_iterations",    default=0,    type=int, help="Number of corrector steps to do")
+    parser.add_argument("--corrector_tmin",      default=0.,    type=float,        help="Time up to which to apply corrections")
+    parser.add_argument("--corrector",           default=None,                    help="Either ULA, MALA or HMC")
+    parser.add_argument("--snr",                 default=1e-1,  type=float,        help="SNR parameter to infer epsilon at temperature t")
+    parser.add_argument("--mass",                default=1.,    type=float,        help="Mass parameter for HMC")
+    parser.add_argument("--leapfrog_steps",      default=2,     type=int,          help="Number of leapfreog integration steps for HMC")
+    parser.add_argument("--delta_logp_steps",    default=2,     type=int,          help="Used for computing acceptance ratios in MALA")
 
     # Reproducibility params
     parser.add_argument("--seed",                default=None,   type=int,       help="Seed for the random number generators.")

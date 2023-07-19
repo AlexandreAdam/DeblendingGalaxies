@@ -83,7 +83,6 @@ do
                           --walkers=$walkers\
                           --batch_size=$batch_size\
                           --noise_indexes ${noise_indices[@]}\ 
-                          #-M=$M\
                         image_index=$(($image_index+1))
                         noise_index=$(($noise_index+$n_obs))
                     done
