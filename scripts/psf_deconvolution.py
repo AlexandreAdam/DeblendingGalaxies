@@ -103,25 +103,29 @@ def main(args):
         if args.downsample > 0:
             print(f"Downsampling {args.downsample} times")
             reference_profile = torch.nn.functional.avg_pool2d(reference_profile, kernel_size=2 * args.downsample, stride=2 * args.downsample)
-        
-        # wcs_list = [make_wcs() for]
-        # forward_model = make_forward_model(
-                # psf, 
-                # wcs_list, 
-                # super_sampling_factor=args.super_sampling_factor
+       
+        coord = SkyCoord(ra=10*units.deg, dec=20*units.deg)
+        wcs = make_wcs(coord, orientation=0, pixels=args.obseveration_pixels, pixel_size=args.observation_pixel_size * units.arcsec)
+        wcs_list = [wcs for _ in args.n_obs]
+        forward_model = make_forward_model(
+                psf, 
+                wcs_list, 
+                super_sampling_factor=args.super_sampling_factor,
+                model_pixels=args.model_pixels,
+                model_pixel_size=args.model_pixel_size * units.arcsec
+                )
 
         if args.slic_likelihood:
             print("Adding non-gaussian noise to the observation...")
-            print(f"Loading noise map {args.noise_map} | id = {args.noise_indexex}")
+            print(f"Loading noise map {args.noise_map} | id = {args.noise_indexes}")
+            assert args.n_obs == len(args.noise_indexes), f"Number of noise maps {len(args.noise_indexes} should maps n_obs {args.n_obs}")
             noise = np.load(args.noise_map)[args.noise_indexex].astype(np.float32)
-            noise = torch.tensor(noise).view(1, -1, *noise.shape).to(DEVICE)
+            noise = torch.tensor(noise).view(1, *noise.shape).to(DEVICE)
             noise = CenterCrop(args.observation_pixels)(noise)
             observation += noise
         else:
             print(f"Adding Gaussian noise with rms = {args.noise_rms} to the observation")
             observation += torch.randn_like(observation) * args.noise_rms
-    # forward_model = make_forward_model(args, psf)
-    # observation = forward_model(link_function(reference_profile))
 
     if args.probes:
         print("Using probes link function")
@@ -268,6 +272,7 @@ if __name__ == '__main__':
     parser.add_argument("--slic_guidance_factor", default=1., type=float,   help="Balance likelihood and prior with this fudge factor.")
     parser.add_argument("--noise_map",           default=None)
     parser.add_argument("--noise_indexes",       default=None, nargs="+", type=int,  help="Noise per observations")
+    parser.add_argument("--n_obs",                default=1, type=int,               help="Number of observation to use") 
 
     # Prior sampling mode, this will ignore everything about the data. Used for testing or generating training sets.
     parser.add_argument("--from_prior",         action="store_true",               help="Ignore the observation and sample from the prior")
