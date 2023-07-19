@@ -17,6 +17,8 @@ source $HOME/environments/milex/bin/activate
 #n_observations_grid=(1 2)
 #snr_grid=(1e-2 1e-1 1e-1)
 #len_posteriors=1000
+#walkers=10
+#batch_size=10
 
 # Test setup
 alpha_grid=(50)
@@ -25,7 +27,8 @@ M_grid=(0)
 n_observations_grid=(2)
 snr_grid=(1e-2)
 len_posteriors=2
-
+walkers=10
+batch_size=10
 
 total=${#alpha_grid[@]}
 
