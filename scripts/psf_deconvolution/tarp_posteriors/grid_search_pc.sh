@@ -50,7 +50,7 @@ do
         python $DEBLENDER/scripts/psf_deconvolution.py\
           --experiment_name="tarp_posterior_"$j"_ref"$image_index"_alpha"$alpha"_N"$N"_M"$M"_snr"$snr"_nobs"$n_obs\
           --result_dir=$DEBLENDER/results/\
-          --prior_model=$DEBLENDER/models/ncsnpp_ct_g_220912024942\
+          --prior_model=$DEBLENDER/models/ncsnpp_probes_g_64_230604024652\
           --psf_fits=$DEBLENDER/data/F814w_WFC3UV_cropped_psf.fits\
           --psf_key=PRIMARY\
           --injection_test\
@@ -62,7 +62,7 @@ do
           --dataset_channels_last\
           --observation_pixels=64\
           --observation_pixel_size=0.05\
-          --model_pixels=128\
+          --model_pixels=64\
           --model_pixel_size=0.025\
           --super_sampling_factor=2\
           --slic_likelihood\

@@ -322,7 +322,7 @@ if __name__ == '__main__':
     parser.add_argument("--logname_prefixe",    default="score_model",              help="If name of the log is not provided, this prefix is prepended to the date")
     parser.add_argument("--model_dir",          default="None",                     help="Path to the directory where to save models checkpoints.")
     parser.add_argument("--checkpoints",        default=2, type=int,               help="Save a checkpoint of the models each {%} epoch.")
-    parser.add_argument("--models_to_keep",     default=10, type=int,               help="Only keep 3 best model, on top of the last checkpoint")
+    parser.add_argument("--models_to_keep",     default=3, type=int,               help="Only keep 3 best model, on top of the last checkpoint")
 
     # Reproducibility params
     parser.add_argument("--seed",               default=None, type=int,             help="Random seed for numpy and torch")
