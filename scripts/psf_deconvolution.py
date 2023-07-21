@@ -1,7 +1,7 @@
 from score_models import ScoreModel
 from torch.func import vmap, grad, vjp
 from torchvision.transforms import CenterCrop
-from definitions import DEVICE, linear_preprocessing
+from definitions import DEVICE
 from correctors import ula_step, mala_step, hmc_step
 from forward_model import make_forward_model, make_wcs
 from astropy.wcs import WCS
@@ -106,7 +106,7 @@ def main(args):
             reference_profile = torch.nn.functional.avg_pool2d(reference_profile, kernel_size=2 * args.downsample, stride=2 * args.downsample)
        
         coord = SkyCoord(ra=10*units.deg, dec=20*units.deg)
-        wcs = make_wcs(coord, orientation=0, pixels=args.obseveration_pixels, pixel_size=args.observation_pixel_size * units.arcsec)
+        wcs = make_wcs(coord, orientation=0, pixels=args.observation_pixels, pixel_size=args.observation_pixel_size * units.arcsec)
         wcs_list = [wcs for _ in args.n_obs]
         forward_model = make_forward_model(
                 psf, 
