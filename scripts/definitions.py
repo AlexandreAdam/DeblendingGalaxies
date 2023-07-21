@@ -212,14 +212,14 @@ def create_random_crops(img, crop_height, crop_width, num_crops):
 
 
 def save_cutout(
+        output_path: str,
         pixels, 
         flc_or_flt_path: str, 
         coordinate: SkyCoord, 
-        output_path: str,
         drz_path=None, 
         ver=1,
         flux_smaller_than=0.35, # Used to compute statistics
-        show_sky_statistics=True,
+        verbose=0,
         overwrite=False
         ):
     """
@@ -231,6 +231,7 @@ def save_cutout(
     Our convention will be to save a cutout per flc. The script will injest each 
     """
     data = fits.open(flc_or_flt_path)
+    # print(data.info())
     hdul = []
     hdul.append(fits.PrimaryHDU(header=data[0].header))
     
@@ -247,27 +248,28 @@ def save_cutout(
         drz_cutout = Cutout2D(drz_data["SCI"].data, coordinate, pixels, wcs=WCS(drz_header))
         drz_header.update(drz_cutout.wcs.to_header())
         drz = fits.ImageHDU(drz_cutout.data, name="DRZ", header=header)
-    hdul.append(drz)
+        hdul.append(drz)
    
     temp = image.ravel() / exptime
     dark_sky = temp[(temp > 0) & (temp < flux_smaller_than)]
-    three_sigma = np.quantile(dark_sky, 0.997))
+    three_sigma = np.quantile(dark_sky, 0.997)
     two_sigma = np.quantile(dark_sky, 0.95)
     dark_sky_mode = np.quantile(dark_sky, 0.5)
-    print(f"Measured dark sky flux = {dark_sky_mode:.2e} electrons/s")
+    if verbose:
+        print(f"Measured dark sky flux = {dark_sky_mode:.2e} electrons/s")
    
-    if show_sky_statistics:
+    if verbose:
         plt.figure()
-        plt.title(flc_or_flt_pathh)
+        plt.title(flc_or_flt_path, fontsize=15)
         plt.hist(dark_sky, bins=100)
-        plt.annotate(r"Dark sky flux = %.3f $e^{-}/s$" % dark_sky_mode, xy=(0.01, 0.8), xycoords="axes fraction")
-        plt.annotate(r"Dark sky $3\sigma$ = %.3f $e^{-}/s$" % three_sigma, xy=(0.01, 0.7), xycoords="axes fraction")
-        plt.annotate(r"Dark sky $2\sigma$ = %.3f $e^{-}/s$" % two_sigma, xy=(0.01, 0.6), xycoords="axes fraction")
+        plt.annotate(r"Dark sky flux = %.2e $e^{-}/s$" % dark_sky_mode, xy=(0.01, 0.8), xycoords="axes fraction")
+        plt.annotate(r"Dark sky $3\sigma$ = %.2e $e^{-}/s$" % three_sigma, xy=(0.01, 0.7), xycoords="axes fraction")
+        plt.annotate(r"Dark sky $2\sigma$ = %.2e $e^{-}/s$" % two_sigma, xy=(0.01, 0.6), xycoords="axes fraction")
 
-        plt.xlim(-0.1)
+        # plt.xlim(-0.1)
         plt.xlabel(r"$e^{-}/s$")
         plt.ylabel("Count")
-        plt.axvline(np.mean(dark_sky_modes), color="k", ls="--");
+        plt.axvline(np.mean(dark_sky_mode), color="k", ls="--");
         plt.show()
     
     pam = pamutils.pam_from_wcs(cutout.wcs) # pixel area map reads from distortion table coefficients in fits file
@@ -277,7 +279,8 @@ def save_cutout(
     wcs_hdr["CTYPE2"] = 'DEC--TAN-SIP'
     header.update(wcs_hdr)
     header["DARKSKY"] = dark_sky_mode
-    print("Applying PAM, dividing by EXPTIME and subtracting dark sky mode")
+    if verbose:
+        print("Applying PAM, dividing by EXPTIME and subtracting dark sky mode")
     hdul.append(fits.ImageHDU(cutout.data * pam / exptime - dark_sky_mode, name="SCI", header=header))
     
     distortion_papers = []
@@ -287,37 +290,32 @@ def save_cutout(
     hdul.extend(distortion_papers)
     hdul_obj = fits.HDUList(hdul)
     hdul_obj.writeto(output_path, overwrite=overwrite)
-    return hdul_obj
+    return hdul_obj, data, cutout
 
 
-# def create_noise_dataset():
-    # N = 5000
-    # img_size = int(size.value)
-    # good_crops = []
-    # bad_crops = []
+def create_noise_dataset(size, N, path, flux_criteria, ver=1,  flux_smaller_than=0.35, return_bad_crops=False):
+    data = fits.open(path)
+    image = data["SCI", ver].data
+    wcs = WCS(data["SCI", ver].header, data)
+    pam = pamutils.pam_from_wcs(wcs)
+    exptime = data[0].header["EXPTIME"]
 
-    # criteria = 1 # percentage of pixel with a flux above 3 sigma
-    # flux_criteria = 0.013
-    # for i, f in tqdm(enumerate(flc_paths)):
-        # for j, detector in enumerate([1, 4]):
-            # k = i * 2 + j
-            # data = fits.open(f)
-            # img = data[detector].data
-            # wcs = WCS(data[detector].header, data)
-            # pam = pamutils.pam_from_wcs(wcs) # pixel area map read from distortion table coefficients in fits file
-            # exptime = data[0].header["EXPTIME"]
-            # dark_sky = dark_sky_modes[k] # use the measured (detector specific) dark sky flux measurement 
-            # three_sigma_rule = three_sigmas[k]
-            # two_sigma_rule = two_sigmas[k]
-            # crops = create_random_crops(img * pam / exptime - dark_sky, img_size , img_size, N) # correct flux with PAM here
-            # # Ignore cosmic rays, we don't mind them too much. We want to avoid objects that look like signal
-            # for c in crops:
-                # above_zero = c > 0
-                # # if (((c[~probably_cosmic_ray] > two_sigma_rule).sum() / img_size**2 * 100) < criteria) & (c[above_zero].sum()/img_size**2 < flux_criteria):
-                # if (c[above_zero].sum()/img_size**2 < flux_criteria):
-                    # good_crops.append(c)
-                # else: 
-                    # bad_crops.append(c)
-    # print(f"{len(good_crops):d} good crops and {len(bad_crops):d} bad crops")
-
+    temp = image.ravel() / exptime
+    dark_sky = temp[(temp > 0) & (temp < flux_smaller_than)]
+    dark_sky_mode = np.quantile(dark_sky, 0.5)
+    print(f"Measured dark sky flux = {dark_sky_mode:.2e} electrons/s")
+    
+    crops = create_random_crops(image * pam / exptime - dark_sky_mode, size, size, N)
+    good_crops = []
+    bad_crops = []
+    for c in crops:
+        if (c[c>0].sum()/size**2 < flux_criteria):
+            good_crops.append(c)
+        else: 
+            bad_crops.append(c)
+    print(f"{len(good_crops):d} good crops and {len(bad_crops):d} bad crops")
+    if return_bad_crops:
+        return good_crops, bad_crops
+    else:
+        return good_crops
 
