@@ -35,6 +35,7 @@ n_posteriors=10
 walkers=10
 batch_size=10
 alpha=100
+n_obs=2
 N=1000
 
 total=$((len_mass*len_leapfrog*len_M*len_corrector_tmin*len_snr))
