@@ -77,7 +77,7 @@ do
                           --model_pixel_size=0.025\
                           --super_sampling_factor=4\
                           --slic_likelihood\
-                          --slic_model=$DEBLENDER/models/ncsnpp_hst_noise_flat_field_psf_f814w_wfc3uv_ssf2_flux_lt_0.013_230718121853\
+                          --slic_model=$DEBLENDER/models/ncsnpp_hst_noise_flat_field_psf_f814w_wfc3uv_ssf2_32_flux_lt_0.013_230718211513\
                           --slic_guidance_factor=$alpha\
                           --noise_map=$DEBLENDER/data/connor_targets_flat_fields_noise_cutouts_flux_lt_0.013.npy\
                           --em_iterations=$N\
