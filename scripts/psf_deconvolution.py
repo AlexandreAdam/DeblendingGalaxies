@@ -119,7 +119,7 @@ def main(args):
         if args.slic_likelihood:
             print("Adding non-gaussian noise to the observation...")
             print(f"Loading noise map {args.noise_map} | id = {args.noise_indexes}")
-            assert args.n_obs == len(args.noise_indexes), f"Number of noise maps {len(args.noise_indexes} should maps n_obs {args.n_obs}")
+            assert args.n_obs == len(args.noise_indexes), f"Number of noise maps {len(args.noise_indexes)} should maps n_obs {args.n_obs}"
             noise = np.load(args.noise_map)[args.noise_indexex].astype(np.float32)
             noise = torch.tensor(noise).view(1, *noise.shape).to(DEVICE)
             noise = CenterCrop(args.observation_pixels)(noise)
