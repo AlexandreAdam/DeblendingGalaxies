@@ -107,7 +107,7 @@ def main(args):
        
         coord = SkyCoord(ra=10*units.deg, dec=20*units.deg)
         wcs = make_wcs(coord, orientation=0, pixels=args.observation_pixels, pixel_size=args.observation_pixel_size * units.arcsec)
-        wcs_list = [wcs for _ in args.n_obs]
+        wcs_list = [wcs for _ in range(args.n_obs)]
         forward_model = make_forward_model(
                 psf, 
                 wcs_list, 
