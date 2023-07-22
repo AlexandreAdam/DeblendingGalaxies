@@ -228,7 +228,8 @@ def main(args):
                     if t[0] > args.corrector_tmin and t[0] > 0 and args.corrector is not None:
                         for _ in range(args.corrector_iterations):
                             epsilon = (args.snr * sigma(t))**2
-                            x = corrector(x, epsilon, score_fn)
+                            # redefine signature of score_fn since corrector doesn't know about t
+                            x = corrector(x, epsilon, lambda x: score_fn(t, x))
             hf["model"][n * args.batch_size: (n+1) * args.batch_size] = link_function(x_mean).cpu().numpy().astype(np.float32)
             hf["reconstruction"][n * args.batch_size: (n+1) * args.batch_size] = forward_model(link_function(x_mean)).cpu().numpy().astype(np.float32)
 
@@ -242,7 +243,8 @@ def main(args):
                     if t[0] > args.corrector_tmin and t[0] > 0 and args.corrector is not None:
                         for _ in range(args.corrector_iterations):
                             epsilon = (args.snr * sigma(t))**2
-                            x = corrector(x, epsilon, score_fn)
+                            # redefine signature of score_fn since corrector doesn't know about t
+                            x = corrector(x, epsilon, lambda x: score_fn(t, x))
             hf["model"][(n+1) * args.batch_size:] = link_function(x_mean).cpu().numpy().astype(np.float32)
             hf["reconstruction"][(n+1) * args.batch_size:] = forward_model(link_function(x_mean)).cpu().numpy().astype(np.float32)
 
