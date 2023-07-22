@@ -14,7 +14,7 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --psf_fits=$DEBLENDER/data/F814w_WFC3UV_cropped_psf.fits\
   --psf_key=PRIMARY\
   --real_data\
-  --observation_fits=$DEBLENDER/data/connors_target1.fits\
+  --observation_fits $DEBLENDER/data/connors_target1.fits\
   --observation_keys 2 3 4 5\
   --super_sampling_factor=4\
   --model_pixels=256\

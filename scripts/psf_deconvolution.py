@@ -65,10 +65,15 @@ def main(args):
 
     if args.real_data:
         print("Real data mode...")
-        data = fits.open(args.observation_fits)
-        observation = np.stack([data[try_int(k)].data for k in args.observation_keys], axis=0)
+        observation = []
+        wcs_list = []
+        for path in args.observation_fits:
+            data = fits.open(path)
+            exposures = np.stack([data[try_int(k)].data for k in args.observation_keys], axis=0)
+            wcs_list.extent([WCS(data[try_int(k)].header, data) for k in args.observation_keys])
+            observation.append(exposures)
+        observation = np.concatenate(observation, axis=0)
         observation = torch.tensor(observation).float().to(DEVICE)[None] # [1, O, pix, pix]
-        wcs_list = [WCS(data[try_int(k)].header, data) for k in args.observation_keys]
         if args.fiducial_ra is not None:
             assert args.fiducial_dec is not None, "If RA is provided, so must be DEC"
             print(f"Specifying fiducial center coordinate for the model at {args.fiducial_ra}, {args.fiducial_dec}")
@@ -249,7 +254,7 @@ if __name__ == '__main__':
                                                                                          "fits file for the observation and a fits file for the PSF. "
                                                                                          "Note that this mode overwrite arguments related to a fake "
                                                                                          "observation, used in the injection test mode, with the content of the fits header.")
-    parser.add_argument("--observation_fits",   default=None,                        help="Path to observation fits file")
+    parser.add_argument("--observation_fits",   nargs="+", default=None,                        help="Path to observation fits file")
     parser.add_argument("--observation_keys",   nargs="+", default=None,             help="Key to observations in the fits file")
     parser.add_argument("--fiducial_ra",        default=None,                        help="Right ascension, in hourangle, of the central pixel of the model")
     parser.add_argument("--fiducial_dec",       default=None,                        help="Declination, in degrees, of the central pixel of the model")

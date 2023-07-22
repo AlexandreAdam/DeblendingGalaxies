@@ -128,7 +128,7 @@ def main(args):
     model = ScoreModel(net, sigma_min=sigma_min, sigma_max=sigma_max)
     dataset = Dataset(args.dataset_path, device=DEVICE)
     dataset = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+    optimizer = torch.optim.Adam(model.model.parameters(), lr=args.learning_rate)
     ema = ExponentialMovingAverage(model.parameters(), decay=args.ema_decay)
 
     def loss_fn(x):
@@ -253,7 +253,7 @@ def main(args):
                 with open(os.path.join(checkpoints_dir, "score_sheet.txt"), mode="a") as f:
                     f.write(f"{lastest_checkpoint} {cost}\n")
                 with ema.average_parameters():  # save EMA parameters
-                    torch.save(model.state_dict(), os.path.join(checkpoints_dir, f"checkpoint_{cost:.4e}_{lastest_checkpoint:03d}.pt"))
+                    torch.save(model.model.state_dict(), os.path.join(checkpoints_dir, f"checkpoint_{cost:.4e}_{lastest_checkpoint:03d}.pt"))
                 torch.save(optimizer.state_dict(), os.path.join(checkpoints_dir, f"optimizer_{cost:.4e}_{lastest_checkpoint:03d}.pt"))
                 checkpoints.append(lastest_checkpoint)
                 scores.append(cost)
