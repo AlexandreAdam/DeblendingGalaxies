@@ -64,6 +64,14 @@ def main(args):
     with fits.open(args.psf_fits) as data:
         psf = data[args.psf_key].data[None].astype(np.float32) # add the channel dimension, a single channel for now.
 
+    if args.probes:
+        print("Using probes link function")
+        link_function = probes_link_function
+        
+    else:
+        print("Not using any link function")
+        link_function = lambda x: x
+
     if args.real_data:
         print("Real data mode...")
         observation = []
@@ -140,14 +148,6 @@ def main(args):
             observation += torch.randn_like(observation) * args.noise_rms
     else:
         raise ValueError("Either real_data or injection_test must be specified")
-
-    if args.probes:
-        print("Using probes link function")
-        link_function = probes_link_function
-        
-    else:
-        print("Not using any link function")
-        link_function = lambda x: x
 
     if args.diagonal_gaussian_likelihood:
         print("Using Gaussian Likelihood for inference")
