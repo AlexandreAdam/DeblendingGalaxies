@@ -123,9 +123,9 @@ def main(args):
 
         if args.slic_likelihood:
             print("Adding non-gaussian noise to the observation...")
-            print(f"Loading noise map {args.noise_map} | id = {args.noise_indexes}")
-            assert args.n_obs == len(args.noise_indexes), f"Number of noise maps {len(args.noise_indexes)} should maps n_obs {args.n_obs}"
-            noise = np.load(args.noise_map)[args.noise_indexex].astype(np.float32)
+            print(f"Loading noise map {args.noise_map} | id = {args.noise_indices}")
+            assert args.n_obs == len(args.noise_indices), f"Number of noise maps {len(args.noise_indices)} should maps n_obs {args.n_obs}"
+            noise = np.load(args.noise_map)[args.noise_indices].astype(np.float32)
             noise = torch.tensor(noise).view(1, *noise.shape).to(DEVICE)
             noise = CenterCrop(args.observation_pixels)(noise)
             observation += noise
@@ -288,7 +288,7 @@ if __name__ == '__main__':
     parser.add_argument("--slic_model_checkpoint",   default=None, type=int,        help="Index of the slic model checkpoint to load.")
     parser.add_argument("--slic_guidance_factor", default=1., type=float,   help="Balance likelihood and prior with this fudge factor.")
     parser.add_argument("--noise_map",           default=None)
-    parser.add_argument("--noise_indexes",       default=None, nargs="+", type=int,  help="Noise per observations")
+    parser.add_argument("--noise_indices",       default=None, nargs="+", type=int,  help="Noise per observations")
     parser.add_argument("--n_obs",                default=1, type=int,               help="Number of observation to use") 
 
     # Prior sampling mode, this will ignore everything about the data. Used for testing or generating training sets.

@@ -92,7 +92,7 @@ do
                           --mass=$mass\
                           --leapfrog_steps=$leapfrog_steps\
                           --delta_logp_steps=2\
-                          --noise_indexes ${noise_indices[@]}\ 
+                          --noise_indices ${noise_indices[@]}\ 
                         image_index=$(($image_index+1))
                         noise_index=$(($noise_index+$n_obs))
                     done
