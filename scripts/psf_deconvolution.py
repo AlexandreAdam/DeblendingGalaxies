@@ -1,3 +1,4 @@
+from weakref import ref
 from score_models import ScoreModel
 from torch.func import vmap, grad, vjp
 from torchvision.transforms import CenterCrop
@@ -30,7 +31,7 @@ def try_int(x):
         return x
 
 def probes_link_function(x):
-    return (x + 1) / 2.
+    return (x + 1) / 2. * 1.48
 
 def skirt_link_function(x):
     return x
@@ -109,6 +110,10 @@ def main(args):
         if args.downsample > 0:
             print(f"Downsampling {args.downsample} times")
             reference_profile = torch.nn.functional.avg_pool2d(reference_profile, kernel_size=2 * args.downsample, stride=2 * args.downsample)
+            
+        if args.probes:
+            print("Preprocessing reference profile with probes g channel")
+            reference_profile = link_function(preprocess_probes_g_channel(reference_profile))
        
         coord = SkyCoord(ra=10*units.deg, dec=20*units.deg)
         wcs = make_wcs(coord, orientation=0, pixels=args.observation_pixels, pixel_size=args.observation_pixel_size * units.arcsec)
@@ -120,6 +125,7 @@ def main(args):
                 model_pixels=args.model_pixels,
                 model_pixel_size=args.model_pixel_size * units.arcsec
                 )
+        observation = forward_model(reference_profile)
 
         if args.slic_likelihood:
             print("Adding non-gaussian noise to the observation...")
@@ -132,6 +138,8 @@ def main(args):
         else:
             print(f"Adding Gaussian noise with rms = {args.noise_rms} to the observation")
             observation += torch.randn_like(observation) * args.noise_rms
+    else:
+        raise ValueError("Either real_data or injection_test must be specified")
 
     if args.probes:
         print("Using probes link function")
