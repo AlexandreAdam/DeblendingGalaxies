@@ -74,6 +74,7 @@ do
                           --dataset_channels_last\
                           --observation_pixels=32\
                           --observation_pixel_size=0.05\
+                          --n_obs=$n_obs\
                           --model_pixels=64\
                           --model_pixel_size=0.025\
                           --super_sampling_factor=4\
