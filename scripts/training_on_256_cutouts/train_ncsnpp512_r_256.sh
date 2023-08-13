@@ -1,4 +1,3 @@
-
 #!/bin/bash
 #SBATCH --tasks=1
 #SBATCH --cpus-per-task=1 # maximum cpu per task is 3.5 per gpus
@@ -9,7 +8,7 @@
 #SBATCH --job-name=Train_SKIRT256_r
 #SBATCH --output=%x-%j.out
 cp $HOME/scratch/skirt256_grizy.h5 $SLURM_TMPDIR/skirt256_grizy.h5
-source $HOME/environments/scope/bin/activate
+source $HOME/environments/milex/bin/activate
 python $DEBLENDER/scripts/train_score_model.py\
   --model_architecture=ncsnpp\
   --dataset_path=$SLURM_TMPDIR/skirt256_grizy.h5\

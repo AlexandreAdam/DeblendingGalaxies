@@ -8,7 +8,7 @@
 #SBATCH --job-name=Train_SKIRT64_g
 #SBATCH --output=%x-%j.out
 cp $HOME/scratch/skirt64_grizy.h5 $SLURM_TMPDIR/skirt64_grizy.h5
-source $HOME/environments/scope/bin/activate
+source $HOME/environments/milex/bin/activate
 python $DEBLENDER/scripts/train_score_modelv2.py\
   --model_architecture=ncsnpp\
   --dataset_path=$SLURM_TMPDIR/skirt64_grizy.h5\
