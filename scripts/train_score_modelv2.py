@@ -30,7 +30,6 @@ class Dataset(torch.utils.data.Dataset):
         else:
             return torch.tensor(self.hf[self.key][index, self.channels]).to(self.device)
 
-
 def main(args):
     with open(args.model_parameters, "r") as f:
         hyperparameters = json.load(f)

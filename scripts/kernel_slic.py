@@ -87,6 +87,7 @@ class KernelSLIC(ScoreModel):
     
     def score(self, t, x, *args):
         _, *D = x.shape
+        # Make sure to redefine score with low pass constant
         return self.model(t, x, *args) / self.sde.sigma(t).view(-1, *[1]*len(D)) / self.low_pass
     
     def _transition_kernel_score(self, z):
@@ -94,7 +95,6 @@ class KernelSLIC(ScoreModel):
         Analytical formula for the score of the transition kernel of the SDE, to be used
         in our modified version of DSM. We use the effective kernel to compute a precision matrix 
         in Fourier space (diagonal by assumption that the forward model can be approximated by a convolution). 
-        
         """
         z_tilde = torch.fft.fft2(z)
         score_tilde = z_tilde * self._transition_kernel_precision 
@@ -111,8 +111,9 @@ class KernelSLIC(ScoreModel):
         # Generate noise in tangent space and then correlate it with forward model
         z = self.forward_model(torch.randn(B, *self.input_dimensions)) 
         target = self._transition_kernel_score(z)
-        t = torch.ones(B).to(self.device)*1.#torch.rand(B).to(self.device) * (sde.T - sde.epsilon) + sde.epsilon
+        t = torch.rand(B).to(self.device) * (sde.T - sde.epsilon) + sde.epsilon
         mean, sigma = sde.marginal_prob(t, samples)
+        # vjp func is the transposed forward model operator
         _, vjp_func = vjp(self.forward_model, torch.randn(B, *self.input_dimensions))
         # Redefinition of the model output with the low_pass factor to help learning
         u = vjp_func(target*self.low_pass + self.model(t, mean + sigma * z, *args))[0]
