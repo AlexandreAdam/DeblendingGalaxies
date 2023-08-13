@@ -44,7 +44,7 @@ def make_forward_model(args, psf):
     # TODO support a more sophisticated coordinate systems with astropy WCS.
     """
     C, H, W = psf.shape
-    psf = torch.tensor(psf).to(DEVICE).view(C, 1, H, W) # reshape to a convolution kernel [channel_out, channels_in/groups, H, W]
+    psf = torch.tensor(psf).float().to(DEVICE).view(C, 1, H, W) # reshape to a convolution kernel [channel_out, channels_in/groups, H, W]
     batched_interpolation = vmap(interpolate, in_dims=(0, None))  # only batch over the images
 
     fov = args.observation_pixel_size * args.observation_pixels

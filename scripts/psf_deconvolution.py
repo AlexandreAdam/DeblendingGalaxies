@@ -1,4 +1,3 @@
-from weakref import ref
 from score_models import ScoreModel
 from torch.func import vmap, grad, vjp
 from torchvision.transforms import CenterCrop
@@ -14,6 +13,7 @@ import os
 from astropy.io import fits
 import h5py
 from tqdm import tqdm
+import time
 
 
 # total number of slurm workers detected
@@ -30,25 +30,27 @@ def try_int(x):
     except ValueError:
         return x
 
-def probes_link_function(x):
-    return (x + 1) / 2. * 1.48
 
 def skirt_link_function(x):
     return x
 
 def preprocess_probes_g_channel(img):  # channel 0
     img = torch.clamp(img, 0, 1.48)
-    img = 2 * img / 1.48 - 1.
+    img = 2 * img / 1.48 - 1. # inverse link function
     return img
+
+def probes_link_function(x):
+    return (x + 1) / 2. * 1.48
 
 def rad_to_arcsec(theta):
     return theta * 180 / np.pi * 3600
-
 
 def main(args):
     if args.seed is not None:
         np.random.seed(args.seed)
         torch.manual_seed(args.seed)
+    if not os.path.isdir(args.result_dir):
+        os.mkdir(args.result_dir)
     
     # Load model
     prior_model = ScoreModel(checkpoints_directory=args.prior_model)
@@ -218,7 +220,8 @@ def main(args):
         hf.create_dataset("model", [args.walkers, 1, args.model_pixels, args.model_pixels], dtype=np.float32)
         hf.create_dataset("reconstruction", [args.walkers, *observation.shape[1:]], dtype=np.float32)
         hf["model"].attrs["posterior_sample"] = not args.from_prior
-        for n in range(args.walkers // args.batch_size):
+        start_time = time.time()
+        fo n in range(args.walkers // args.batch_size):
             with torch.no_grad():
                 dt = -1. / args.em_iterations
                 t = torch.ones(args.batch_size).to(DEVICE)
@@ -247,6 +250,21 @@ def main(args):
                             x = corrector(x, epsilon, lambda x: score_fn(t, x))
             hf["model"][(n+1) * args.batch_size:] = link_function(x_mean).cpu().numpy().astype(np.float32)
             hf["reconstruction"][(n+1) * args.batch_size:] = forward_model(link_function(x_mean)).cpu().numpy().astype(np.float32)
+
+        hf["model"].attrs["total_time"] = time.time() - start_time
+        hf["model"].attrs["total_time_unit"] = "seconds"
+        hf["model"].attrs["batch_size"] = args.batch_size
+        hf["model"].attrs["euler_maruyama_iteration"] = args.em_iterations
+        hf["model"].attrs["corrector"] = args.corrector
+        hf["model"].attrs["corrector_iterations"] = args.corrector_iterations
+        hf["model"].attrs["corrector_tmin"] = args.corrector_tmin
+        hf["model"].attrs["prior_model"] = os.path.split(args.prior_model)[-1]
+        hf["model"].attrs["slic_model"] = args.slic_model
+        hf["model"].attrs["gaussian_likelihood"] = args.diagonal_gaussian_likelihood
+        hf["model"].attrs["mass"] = args.mass if args.corrector.upper() == "HMC" else None
+        hf["model"].attrs["snr"] = args.snr
+        hf["model"].attrs["leapfrog_steps"] = args.leapfrog_steps if args.corrector.upper() == "HCM" else None
+        hf["model"].attrs["slic_guidance_factor"] = args.slic_guidance_factor
 
 
 if __name__ == '__main__':

@@ -97,10 +97,24 @@ def linear_preprocessing(img):
     We use 10 micro Jansky / arcsec^2 units instead of AB mag.
 
     With this approach, the dynamic range is set by the maximum intensity present in the data,
-    which should not much bigger than 20 (which is the equivalent of AB mag 18 in our unit system).
+    which should not much bigger than 0.2 (which is the equivalent of AB mag 18 in our unit system).
     """
     img = ab_mag_to_jansky_per_arcsec_squared(img)
     return 1e5 * img
+
+
+def microjy_preprocessing(img):
+    """
+    For usage in inverse problem, we need the processing to be linear. For that reason,
+    we only rescale the flux units with linear operations.
+
+    We use micro Jansky / arcsec^2 units instead of AB mag.
+
+    With this approach, the dynamic range is set by the maximum intensity present in the data,
+    which should not much bigger than 20 (which is the equivalent of AB mag 18 in our unit system).
+    """
+    img = ab_mag_to_jansky_per_arcsec_squared(img)
+    return 1e6 * img
 
 
 def inverse_proprocessing(img, dynamic_range=1e5):
