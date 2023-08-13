@@ -20,10 +20,10 @@ source $HOME/environments/milex/bin/activate
 
 # test
 mass_grid=(1)
-M_grid=(1 3)
-leapfrog_steps_grid=(2 5)
+M_grid=(1)
+leapfrog_steps_grid=(1)
 snr_grid=(1e-2)
-corrector_tmin_grid=(0.1 0.5)
+corrector_tmin_grid=(0.5)
 
 len_mass=${#mass_grid[@]}
 len_leapfrog=${#leapfrog_steps_grid[@]}
@@ -31,12 +31,12 @@ len_M=${#M_grid[@]}
 len_snr=${#snr_grid[@]}
 len_corrector_tmin=${#corrector_tmin_grid[@]}
 
-n_posteriors=10 
+n_posteriors=1 
 walkers=10
 batch_size=10
 alpha=100
 n_obs=2
-N=1000
+N=500
 
 total=$((len_mass*len_leapfrog*len_M*len_corrector_tmin*len_snr))
 echo "Grid search over $total TARP experiments"
