@@ -19,7 +19,7 @@ python $DEBLENDER/scripts/train_score_modelv2.py\
   --learning_rate=1e-4\
   --max_time=70\
   --batch_size=4\
-  --logname_prefixe=ncsnpp_vp_skirt_g_64\
+  --logname_prefix=ncsnpp_vp_skirt_g_64\
   --model_dir=$DEBLENDER/models/\
   --checkpoints=10\
   --seed=42\
