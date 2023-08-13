@@ -53,7 +53,7 @@ def main(args):
             models_to_keep=args.models_to_keep,
             seed=args.seed,
             logname=args.logname,
-            logdir=args.logdir,
+            logdir=args.model_dir,
             n_iterations_in_epoch=args.epoch_iterations,
             logname_prefix=args.logname_prefix
             )
@@ -88,7 +88,6 @@ if __name__ == '__main__':
     parser.add_argument("--channels_last",          action="store_true",            help="Wether the data was saved in channels_last format. For backward compatibility mainly. ")
 
     # logs
-    parser.add_argument("--logdir",             default="None",                     help="Path of logs directory. Default if None, no logs recorded.")
     parser.add_argument("--logname",            default=None,                       help="Overwrite name of the log with this argument")
     parser.add_argument("--checkpoints_directory", default=None)
     parser.add_argument("--logname_prefix",    default="score_model",                  help="If name of the log is not provided, this prefix is prepended to the date")
