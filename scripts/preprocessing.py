@@ -80,7 +80,6 @@ def save_cutout(
     Our convention will be to save a cutout per flc. The script will injest each 
     """
     data = fits.open(flc_or_flt_path)
-    # print(data.info())
     hdul = []
     hdul.append(fits.PrimaryHDU(header=data[0].header))
     
@@ -157,7 +156,7 @@ def create_noise_dataset(size, N, path, flux_criteria, ver=1,  flux_smaller_than
     pam = pamutils.pam_from_wcs(wcs)
     if data["SCI", ver].header["BUNIT"] != "ELECTRONS":
         if verbose:
-            print(f"Data units {data["SCI", ver].header["BUNIT"]} is not electrons count, thus exposure time will not be used to normalize the data")
+            print(f"Data units {data['SCI', ver].header['BUNIT']} is not electrons count, thus exposure time will not be used to normalize the data")
         exptime = 1
     else:
         try:

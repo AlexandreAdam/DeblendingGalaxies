@@ -17,36 +17,6 @@ from astropy.io import fits
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-def sliced_score_matching_loss(score_fn, samples, n_cotangent_vectors=1, device=DEVICE, noise_type="gaussian"):
-    """
-    Score matching loss with the Hutchinson trace estimator trick. See Theorem 1 of
-    Hyvärinen (2005). Estimation of Non-Normalized Statistical Models by Score Matching,
-    (https://www.jmlr.org/papers/volume6/hyvarinen05a/hyvarinen05a.pdf).
-
-    We implement an unbiased estimator of this loss with reduced variance reported in
-    Y. Song et al. (2019). A Scalable Approach to Density and Score Estimation
-    (https://arxiv.org/abs/1905.07088).
-
-    Inspired from the official implementation of Sliced Score Matching at https://github.com/ermongroup/sliced_score_matching
-    We also implement the weighting scheme for NCSN (Song & Ermon 2019 https://arxiv.org/abs/1907.05600)
-    """
-    if noise_type not in ["gaussian", "rademacher"]:
-        raise ValueError("noise_type has to be either 'gaussian' or 'rademacher'")
-    B, *D = samples.shape
-    # duplicate noisy samples across the number of particle for the Hutchinson trace estimator
-    samples = torch.tile(samples, [n_cotangent_vectors, *[1]*len(D)])
-    samples.requires_grad_(True)
-
-    # sample cotangent vectors
-    vectors = torch.randn_like(samples)
-    if noise_type == 'rademacher':
-        vectors = vectors.sign()
-
-    score, vjp_func = vjp(score_fn, samples)
-    trace_estimate = vectors * vjp_func(vectors)
-    loss = torch.sum(trace_estimate + score**2) / B / n_cotangent_vectors
-    return loss
-
 
 class Dataset(torch.utils.data.Dataset):
     """

@@ -1,5 +1,20 @@
 import torch
+from torch import Tensor
 from definitions import DEVICE
+
+
+# def sample(current_state: Tensor, score_fn: Callable, log_prob_fn=None, N:int=100, sampler="HMC", **kwargs):
+    # W, *D = current_state.shape
+    # device = current_state.device
+    # epsilon = kwargs.get("epsilon", torch.ones(W).to(device))
+    # mass = kwargs.get("mass", 1)
+    # leapfrog_steps = kwargs.get("leapfrog_steps", 2)
+    # delta_logp_steps = kwargs.get("delta_logp_steps", 2)
+    # if sampler.upper() == "HMC":
+        # step_fn = hmc_step(current_state, epsilon, score_fn)
+    # for step in range(N):
+
+
 
 def simps(f, a: float, b: float, T: int = 128, device=DEVICE) -> torch.Tensor:
     if T % 2 == 1:
