@@ -14,7 +14,7 @@ python $DEBLENDER/scripts/train_score_model.py\
   --dataset_path=$SLURM_TMPDIR/skirt256_grizy.h5\
   --dataset_channels 0\
   --dataset_key=images\
-  --model_parameters=$DEBLENDER/scripts/training_on_512_cutouts/ncsnpp_skirt512_256.json\
+  --model_parameters=$DEBLENDER/scripts/training_on_256_cutouts/ncsnpp_skirt512_256.json\
   --epochs=10000\
   --learning_rate=2e-5\
   --max_time=70\
