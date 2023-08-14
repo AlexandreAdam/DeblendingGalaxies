@@ -22,9 +22,9 @@ python $DEBLENDER/scripts/train_slic_with_psf_v2.py\
   --checkpoints=3\
   --psf_fits=$DEBLENDER/data/F125w_WFC3IR_psf.fits\
   --psf_key="PRIMARY"\
-  --observation_pixels=64\
-  --observation_pixel_size=0.05\
-  --model_pixels=64\
-  --model_pixel_size=0.05\
+  --observation_pixels=32\
+  --observation_pixel_size=0.13\
+  --model_pixels=32\
+  --model_pixel_size=0.13\
   --zero_padding=0\
   --super_sampling_factor=4\
