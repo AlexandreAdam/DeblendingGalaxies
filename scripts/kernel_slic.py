@@ -114,7 +114,7 @@ class KernelSLIC(ScoreModel):
         t = torch.rand(B).to(self.device) * (sde.T - sde.epsilon) + sde.epsilon
         mean, sigma = sde.marginal_prob(t, samples)
         # vjp func is the transposed forward model operator
-        _, vjp_func = vjp(self.forward_model, torch.randn(B, *self.input_dimensions))
+        _, vjp_func = vjp(self.forward_model, torch.randn(B, *self.input_dimensions).to(self.device))
         # Redefinition of the model output with the low_pass factor to help learning
         u = vjp_func(target*self.low_pass + self.model(t, mean + sigma * z, *args))[0]
         return torch.sum(u**2) / B

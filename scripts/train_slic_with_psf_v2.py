@@ -65,11 +65,11 @@ def main(args):
 
     model = KernelSLIC(kernel, idim, forward_model, model=args.model_architecture.lower(), **hyperparameters)
     dataset = Dataset(args.dataset_path, device=DEVICE)
-    # preprocessing = lambda img: random_crop(img, args.observation_pixels)
+    preprocessing = lambda img: random_crop(img, args.observation_pixels)
     model.fit(
             dataset, 
             epochs=args.epochs,
-            # preprocessing_fn=preprocessing,
+            preprocessing_fn=preprocessing,
             learning_rate=args.learning_rate,
             ema_decay=args.ema_decay,
             batch_size=args.batch_size,
