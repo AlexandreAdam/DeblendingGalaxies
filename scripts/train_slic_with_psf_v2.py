@@ -38,8 +38,8 @@ def random_crop(images, new_shape):
     torch.Tensor: a 4D tensor with shape [B, C, new_shape, new_shape]
     """
     batch, channels, height, width = images.shape
-    start_x = torch.randint(0, width - new_shape + 1, (batch, ), dtype=torch.long)
-    start_y = torch.randint(0, height - new_shape + 1, (batch, ), dtype=torch.long)
+    start_x = torch.randint(0, width - new_shape + 1, (batch, ), dtype=torch.long).to(DEVICE)
+    start_y = torch.randint(0, height - new_shape + 1, (batch, ), dtype=torch.long).to(DEVICE)
     
     cropped_images = torch.empty((batch, channels, new_shape, new_shape), dtype=images.dtype, device=DEVICE)
     for i, (img, x, y) in enumerate(zip(images, start_x, start_y)):
