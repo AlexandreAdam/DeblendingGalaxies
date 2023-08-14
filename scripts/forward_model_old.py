@@ -48,7 +48,7 @@ def make_forward_model(args, psf):
     batched_interpolation = vmap(interpolate, in_dims=(0, None))  # only batch over the images
 
     fov = args.observation_pixel_size * args.observation_pixels
-    x = torch.linspace(-1, 1, args.super_sampling_factor*args.observation_pixels).float().to(DEVICE) * fov / 2
+    x = torch.linspace(-1, 1, args.super_sampling_factor*args.observation_pixels).float() * fov / 2
     x, y = torch.meshgrid(x, x, indexing="ij")
     # Transform these coordinates into model pixel indices
     _min = - args.model_pixel_size * (args.model_pixels + args.zero_padding) / 2
