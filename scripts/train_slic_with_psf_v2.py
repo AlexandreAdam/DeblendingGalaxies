@@ -82,7 +82,7 @@ def main(args):
             models_to_keep=args.models_to_keep,
             seed=args.seed,
             logname=args.logname,
-            logdir=args.logdir,
+            logdir=args.model_dir,
             n_iterations_in_epoch=args.epoch_iterations,
             logname_prefix=args.logname_prefix
             )
