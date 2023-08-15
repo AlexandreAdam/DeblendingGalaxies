@@ -17,6 +17,7 @@ class KernelSLIC(ScoreModel):
             model: Union[str, Module] = None, 
             sde: SDE=None, 
             checkpoints_directory=None, 
+            low_pass:float=1e-2,
             **hyperparameters
             ):
         """
@@ -34,6 +35,9 @@ class KernelSLIC(ScoreModel):
             The stochastic differential equation, by default None.
         checkpoints_directory : str, optional
             The directory to save checkpoints, by default None.
+        low_pass : float, optional
+            The low-pass coefficient applied to the Fourier transform of the kernel to avoid numerical issues, by default 1e-2. 
+            The low-pass coefficient is also used to redefine the neural network output to make learning easier. 
         **hyperparameters : dict
             Additional hyperparameters.
 
@@ -61,10 +65,10 @@ class KernelSLIC(ScoreModel):
         self.kernel = torch.as_tensor(kernel).float().to(self.device)
         self.forward_model = forward_model
         self.input_dimensions = input_dimensions
+        self.low_pass = low_pass
        
-        # include the correlation due to the kernel on top of white noise of diffusion
-        power_spectrum = torch.abs(kernel_ft)**2 + 1 
-        # Construct the diagonal precision matrix in Fourier space
+        # Add a loww pass filter to the power spectrum to avoid instabilities
+        power_spectrum = torch.abs(torch.fft.fft2(self.kernel))**2 + low_pass
         self._transition_kernel_precision = 1 / power_spectrum
         
     def slic_score(self, t, x, y, *args):
@@ -76,6 +80,7 @@ class KernelSLIC(ScoreModel):
     
     def score(self, t, x, *args):
         _, *D = x.shape
+        # Make sure to redefine score with low pass constant
         return self.model(t, x, *args) / self.sde.sigma(t).view(-1, *[1]*len(D))
     
     def _transition_kernel_score(self, z):
@@ -94,7 +99,6 @@ class KernelSLIC(ScoreModel):
         We rewrite DSM with the appropriate weighting from Girsanov Theorem
         """
         B, *D = samples.shape
-                                                          
         sde = self.sde
         # Generate noise in tangent space and then correlate it with forward model
         z_input = torch.randn(B, *self.input_dimensions).to(self.device)
@@ -103,6 +107,7 @@ class KernelSLIC(ScoreModel):
         target = self._transition_kernel_score(z)
         t = torch.rand(B).to(self.device) * (sde.T - sde.epsilon) + sde.epsilon
         mean, sigma = sde.marginal_prob(t, samples)
+        # Redefinition of the model output with the low_pass factor to help learning
         u = vjp_func(self.model(t, mean + sigma * z, *args) - target)[0]
         return torch.sum(u**2) / B
     
@@ -215,7 +220,7 @@ if __name__ == "__main__":
     idim = [1, args.model_pixels, args.model_pixels]
     odim = [1, args.observation_pixels, args.observation_pixels]
     kernel = effective_kernel(f, idim, odim, 0, args.observation_pixels//2, args.observation_pixels//2) 
-    model = KernelSLIC(kernel, idim, f, "ncsnpp", sigma_min=1e-2, sigma_max=20, **hp)
+    model = KernelSLIC(kernel, idim, f, "ncsnpp", sigma_min=1e-2, sigma_max=20, low_pass=1e-2, **hp)
     x = torch.randn(5, 1, args.model_pixels, args.model_pixels)
     t = torch.rand(5)
     y = torch.randn(1, 1, args.observation_pixels, args.observation_pixels)

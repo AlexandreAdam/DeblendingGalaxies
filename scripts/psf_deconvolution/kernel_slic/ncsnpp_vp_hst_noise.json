@@ -20,5 +20,6 @@
   "beta_min": 1e-2,
   "beta_max": 20,
   "T": 1,
-  "epsilon": 1e-5
+  "epsilon": 1e-5,
+  "low_pass": 5e-2
 }
