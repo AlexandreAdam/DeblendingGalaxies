@@ -65,7 +65,7 @@ class KernelSLIC(ScoreModel):
         self.forward_model = forward_model
         self.input_dimensions = input_dimensions
         self.low_pass = low_pass
-        self.hyperparameter.update({"low_pass": low_pass})
+        self.hyperparameters.update({"low_pass": low_pass})
        
         # Add a loww pass filter to the power spectrum to avoid instabilities
         power_spectrum = torch.abs(torch.fft.fft2(self.kernel))**2 + low_pass
