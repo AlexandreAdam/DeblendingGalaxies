@@ -65,6 +65,7 @@ class KernelSLIC(ScoreModel):
         self.forward_model = forward_model
         self.input_dimensions = input_dimensions
         self.low_pass = low_pass
+        self.hyperparameter.update({"low_pass": low_pass})
        
         # Add a loww pass filter to the power spectrum to avoid instabilities
         power_spectrum = torch.abs(torch.fft.fft2(self.kernel))**2 + low_pass
@@ -79,7 +80,6 @@ class KernelSLIC(ScoreModel):
     
     def score(self, t, x, *args):
         _, *D = x.shape
-        # Make sure to redefine score with low pass constant
         return self.model(t, x, *args) / self.sde.sigma(t).view(-1, *[1]*len(D))
     
     def _transition_kernel_score(self, z):
@@ -110,7 +110,7 @@ class KernelSLIC(ScoreModel):
         return torch.sum(u**2) / B
     
     @torch.no_grad()
-    def sample(self, batch_size, *args):
+    def sample(self, batch_size, steps, *args):
         """
         An Euler-Maruyama integration of the model SDE
         
