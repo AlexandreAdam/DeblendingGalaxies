@@ -3,7 +3,7 @@ from typing import Callable, Union
 import torch
 from torch import Tensor
 from torch.nn import Module
-from torch.func import vjp, jacrev
+from torch.func import vjp, jvp 
 from score_models.sde import SDE
 from score_models import ScoreModel
 from score_models.utils import DEVICE
@@ -17,7 +17,6 @@ class KernelSLIC(ScoreModel):
             model: Union[str, Module] = None, 
             sde: SDE=None, 
             checkpoints_directory=None, 
-            low_pass:float=1e-2,
             **hyperparameters
             ):
         """
@@ -35,10 +34,6 @@ class KernelSLIC(ScoreModel):
             The stochastic differential equation, by default None.
         checkpoints_directory : str, optional
             The directory to save checkpoints, by default None.
-        low_pass : float, optional
-            The low-pass filters applied to the Fourier transform of the kernel to avoid numerical issues, by default 1e-2. 
-            Note that the inverse square of the low-pass coefficient is largest numerical value in the precision. The 
-            low-pass coefficient is also used to redefine the neural network output to make learning easier. 
         **hyperparameters : dict
             Additional hyperparameters.
 
@@ -63,20 +58,14 @@ class KernelSLIC(ScoreModel):
 
         super().__init__(model, sde=sde, checkpoints_directory=checkpoints_directory, **hyperparameters)
         assert len(kernel.shape) == 3, "Kernel should be an image with channels first." 
-        C, H, W = kernel.shape
         self.kernel = torch.as_tensor(kernel).float().to(self.device)
         self.forward_model = forward_model
         self.input_dimensions = input_dimensions
-        self.low_pass = low_pass
        
-        # Eigenvalues of the effective forward model.
-        Lambda = torch.fft.fft2(torch.fft.fftshift(self.kernel)) 
-        
+        # include the correlation due to the kernel on top of white noise of diffusion
+        power_spectrum = torch.abs(kernel_ft)**2 + 1 
         # Construct the diagonal precision matrix in Fourier space
-        precision = torch.zeros_like(Lambda)
-        precision[Lambda.abs() >= low_pass] = 1/Lambda[Lambda.abs() >= low_pass] / Lambda[Lambda.abs() >= low_pass].conj()
-        precision[Lambda.abs() < low_pass] = 1/low_pass**2 # cap the precision of high frequencies in the score (form of low-pass filter)
-        self._transition_kernel_precision = precision.view(1, *self.kernel.shape)
+        self._transition_kernel_precision = 1 / power_spectrum
         
     def slic_score(self, t, x, y, *args):
         """
@@ -87,8 +76,7 @@ class KernelSLIC(ScoreModel):
     
     def score(self, t, x, *args):
         _, *D = x.shape
-        # Make sure to redefine score with low pass constant
-        return self.model(t, x, *args) / self.sde.sigma(t).view(-1, *[1]*len(D)) / self.low_pass
+        return self.model(t, x, *args) / self.sde.sigma(t).view(-1, *[1]*len(D))
     
     def _transition_kernel_score(self, z):
         """
@@ -115,10 +103,37 @@ class KernelSLIC(ScoreModel):
         target = self._transition_kernel_score(z)
         t = torch.rand(B).to(self.device) * (sde.T - sde.epsilon) + sde.epsilon
         mean, sigma = sde.marginal_prob(t, samples)
-        # Redefinition of the model output with the low_pass factor to help learning
-        u = vjp_func(target*self.low_pass + self.model(t, mean + sigma * z, *args))[0]
+        u = vjp_func(self.model(t, mean + sigma * z, *args) - target)[0]
         return torch.sum(u**2) / B
+    
+    @torch.no_grad()
+    def sample(self, batch_size, *args):
+        """
+        An Euler-Maruyama integration of the model SDE
         
+        steps: Number of Euler-Maruyam steps to perform
+        """
+        sampling_from = "noise distribution" 
+        z = self.sde.prior(self.input_dimensions).sample([batch_size]).to(self.device)
+        x = self.forward_model(z)
+        dt = -(self.sde.T - self.sde.epsilon) / steps
+        t = torch.ones(batch_size).to(self.device) * self.sde.T
+        for _ in (pbar := tqdm(range(steps))):
+            pbar.set_description(f"Sampling from the {sampling_from} | t = {t[0].item():.1f} | sigma = {self.sde.sigma(t)[0].item():.1e}"
+                                 f"| scale ~ {x.max().item():.1e}")
+            t += dt
+            if t[0] < self.sde.epsilon: # Accounts for numerical error in the way we discretize t.
+                break
+            g = self.sde.diffusion(t, x)
+            f = self.sde.drift(t, x) - g**2 * self.score(t, x, *args) 
+            dw = self.forward_model(torch.randn_like(z)) * (-dt)**(1/2)
+            x_mean = x + f * dt
+            x = x_mean + g * dw 
+            if torch.any(torch.isnan(x)):
+                print("Diffusion is not stable, NaN were produced. Stopped sampling.")
+                break
+        return x_mean
+ 
 
 def effective_kernel(
         forward_model:Callable,
@@ -134,6 +149,10 @@ def effective_kernel(
 
     This function uses automatic differentiation to approximate the entire forward model as a convolution between 
     a tangent vector and an 'effective' kernel that represents the forward model.
+    
+    The effective kernel is computed using the JVP operations and a tangent vector that select the pixel in input
+    space representative of the whole forward model. Generally, this pixel should be chosen to be the central 
+    pixel.
 
     Parameters:
     - input_dimensions (list[int, ...]): The dimensions of the input image. It should be a list of integers representing 
@@ -153,11 +172,13 @@ def effective_kernel(
     - AssertionError: If the length of input_dimensions is not 3 or the length of output_dimensions is not 3.
 
     """
+    # This method leverages instead the JVP, since all we care about is the Jacobian dotted with a specific vector
     assert len(input_dimensions) == 3, "input_dimensions should be a list of length 3"
     assert len(output_dimensions) == 3, "output_dimensions should be a list of length 3"
     x = torch.randn(input_dimensions).unsqueeze(0).to(device)
-    A = jacrev(forward_model)(x)
-    kernel = A.view([*output_dimensions, *input_dimensions])[..., channel, row, column]
+    v = torch.zeros(input_dimensions).unsqueeze(0).to(device)
+    v[..., channel, row, column] = 1.
+    _, kernel = jvp(forward_model, (x, ), (v, ))
     return kernel
 
 
@@ -194,7 +215,7 @@ if __name__ == "__main__":
     idim = [1, args.model_pixels, args.model_pixels]
     odim = [1, args.observation_pixels, args.observation_pixels]
     kernel = effective_kernel(f, idim, odim, 0, args.observation_pixels//2, args.observation_pixels//2) 
-    model = KernelSLIC(kernel, idim, f, "ncsnpp", sigma_min=1e-2, sigma_max=20, low_pass=1e-2, **hp)
+    model = KernelSLIC(kernel, idim, f, "ncsnpp", sigma_min=1e-2, sigma_max=20, **hp)
     x = torch.randn(5, 1, args.model_pixels, args.model_pixels)
     t = torch.rand(5)
     y = torch.randn(1, 1, args.observation_pixels, args.observation_pixels)

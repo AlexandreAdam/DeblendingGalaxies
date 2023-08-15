@@ -16,7 +16,7 @@
   "combine_method": "sum",
   "num_res_blocks": 2,
   "dropout": 0,
-  "attention": false,
+  "attention": true,
   "beta0": 1e-2,
   "beta1": 1e5,
   "sigma_min": 1e-3,
