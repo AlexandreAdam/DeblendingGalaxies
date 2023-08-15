@@ -184,7 +184,7 @@ def effective_kernel(
     v = torch.zeros(input_dimensions).unsqueeze(0).to(device)
     v[..., channel, row, column] = 1.
     _, kernel = jvp(forward_model, (x, ), (v, ))
-    return kernel
+    return kernel.squeeze(0)
 
 
 if __name__ == "__main__":
@@ -220,7 +220,8 @@ if __name__ == "__main__":
     idim = [1, args.model_pixels, args.model_pixels]
     odim = [1, args.observation_pixels, args.observation_pixels]
     kernel = effective_kernel(f, idim, odim, 0, args.observation_pixels//2, args.observation_pixels//2) 
-    model = KernelSLIC(kernel, idim, f, "ncsnpp", sigma_min=1e-2, sigma_max=20, low_pass=1e-2, **hp)
+    model = KernelSLIC(kernel, idim, f, "ncsnpp", sigma_min=1e-2, sigma_max=20, low_pass=1e-1, **hp)
+    print(model.low_pass)
     x = torch.randn(5, 1, args.model_pixels, args.model_pixels)
     t = torch.rand(5)
     y = torch.randn(1, 1, args.observation_pixels, args.observation_pixels)
