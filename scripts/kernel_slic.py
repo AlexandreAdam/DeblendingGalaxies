@@ -61,7 +61,6 @@ class KernelSLIC(ScoreModel):
         """
 
         super().__init__(model, sde=sde, checkpoints_directory=checkpoints_directory, **hyperparameters)
-        assert len(kernel.shape) == 3, "Kernel should be an image with channels first." 
         self.kernel = torch.as_tensor(kernel).float().to(self.device)
         self.forward_model = forward_model
         self.input_dimensions = input_dimensions
@@ -107,7 +106,6 @@ class KernelSLIC(ScoreModel):
         target = self._transition_kernel_score(z)
         t = torch.rand(B).to(self.device) * (sde.T - sde.epsilon) + sde.epsilon
         mean, sigma = sde.marginal_prob(t, samples)
-        # Redefinition of the model output with the low_pass factor to help learning
         u = vjp_func(self.model(t, mean + sigma * z, *args) - target)[0]
         return torch.sum(u**2) / B
     
@@ -184,7 +182,7 @@ def effective_kernel(
     v = torch.zeros(input_dimensions).unsqueeze(0).to(device)
     v[..., channel, row, column] = 1.
     _, kernel = jvp(forward_model, (x, ), (v, ))
-    return kernel.squeeze(0)
+    return kernel
 
 
 if __name__ == "__main__":
