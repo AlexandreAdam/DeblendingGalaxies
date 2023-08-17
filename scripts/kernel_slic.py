@@ -11,8 +11,8 @@ from score_models.utils import DEVICE
 class KernelSLIC(ScoreModel):
     def __init__(
             self, 
-            kernel:Tensor, # Kernel of the forward model
-            input_dimensions,
+            input_dimensions:list[int,int,int],
+            output_dimensions:list[int,int,int],
             forward_model:Callable,
             model: Union[str, Module] = None, 
             sde: SDE=None, 
@@ -23,10 +23,10 @@ class KernelSLIC(ScoreModel):
         """
         Parameters:
         -----------
-        kernel : Tensor
-            The kernel of the forward model. Should be an image with channels first.
-        input_dimensions : Tuple[int, int, int]
-            The dimensions of the input to the forward model.
+        input_dimensions : tuple[int, int, int]
+            the dimensions of the input to the forward model.
+        input_dimensions : tuple[int, int, int]
+            the dimensions of the output to the forward model.
         forward_model : Callable
             The forward model function.
         model : Union[str, Module], optional
@@ -61,11 +61,16 @@ class KernelSLIC(ScoreModel):
         """
 
         super().__init__(model, sde=sde, checkpoints_directory=checkpoints_directory, **hyperparameters)
-        self.kernel = torch.as_tensor(kernel).float().to(self.device)
+        self.idim = input_dimensions
+        self.odim = output_dimensions
         self.forward_model = forward_model
-        self.input_dimensions = input_dimensions
+        
         self.low_pass = low_pass
         self.hyperparameters.update({"low_pass": low_pass})
+
+        # Compute effective kernel from central pixel in input (sane default for now)
+        kernel = effective_kernel(forward_model, idim, odim, 0, self.idim[1]//2, self.idim[2]//2) 
+        self.kernel = torch.as_tensor(kernel).float().to(self.device)
        
         # Add a loww pass filter to the power spectrum to avoid instabilities
         power_spectrum = torch.abs(torch.fft.fft2(self.kernel))**2 + low_pass
@@ -80,7 +85,7 @@ class KernelSLIC(ScoreModel):
     
     def score(self, t, x, *args):
         _, *D = x.shape
-        return self.model(t, x, *args) / self.sde.sigma(t).view(-1, *[1]*len(D))
+        return self.model(t, x, *args) / self.sde.sigma(t).view(-1, *[1]*len(D)) / self.low_pass**(1/2)
     
     def _transition_kernel_score(self, z):
         """
@@ -97,12 +102,13 @@ class KernelSLIC(ScoreModel):
         B, *D = samples.shape
         sde = self.sde
         # Generate noise in tangent space and then correlate it with forward model
-        z_input = torch.randn(B, *self.input_dimensions).to(self.device)
+        z_input = torch.randn(B, *self.idim).to(self.device)
         z = self.forward_model(z_input)
         target = self._transition_kernel_score(z)
         t = torch.rand(B).to(self.device) * (sde.T - sde.epsilon) + sde.epsilon
         mean, sigma = sde.marginal_prob(t, samples)
-        u = self.model(t, mean + sigma * z, *args) - target
+        # Redefine target with sqrt of low pass factor (score function is redefined accordingly)
+        u = self.model(t, mean + sigma * z, *args) - target * self.low_pass**(1/2)
         return torch.sum(u**2) / B
     
     @torch.no_grad()
@@ -113,7 +119,7 @@ class KernelSLIC(ScoreModel):
         steps: Number of Euler-Maruyam steps to perform
         """
         sampling_from = "noise distribution" 
-        z = self.sde.prior(self.input_dimensions).sample([batch_size]).to(self.device)
+        z = self.sde.prior(self.idim).sample([batch_size]).to(self.device)
         x = self.forward_model(z)
         dt = -(self.sde.T - self.sde.epsilon) / steps
         t = torch.ones(batch_size).to(self.device) * self.sde.T
@@ -212,7 +218,7 @@ if __name__ == "__main__":
 
     plt.imshow(kernel.squeeze())
     plt.show()
-    model = KernelSLIC(kernel, idim, f, "ncsnpp", sigma_min=1e-2, sigma_max=20, low_pass=1e-2, **hp)
+    model = KernelSLIC(idim, odim, f, "ncsnpp", sigma_min=1e-2, sigma_max=20, low_pass=1e-2, **hp)
     print(model.low_pass)
     x = torch.randn(5, 1, args.model_pixels, args.model_pixels)
     t = torch.rand(5)
