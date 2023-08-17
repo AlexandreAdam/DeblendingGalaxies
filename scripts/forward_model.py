@@ -55,8 +55,6 @@ def make_wcs(skycoord, orientation, pixels, pixel_size):
     hdr["CUNIT2"] = 'deg'
     hdr["CTYPE1"] = "RA---TAN"
     hdr["CTYPE2"] = "DEC--TAN"
-    # hdr["CDELT1"] = pixel_size.to(units.deg).value
-    # hdr["CDELT2"] = pixel_size.to(units.deg).value
     hdr["CDELT1"] = 1.
     hdr["CDELT2"] = 1.
     cdelt = pixel_size.to(units.deg).value
