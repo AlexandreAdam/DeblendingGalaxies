@@ -69,7 +69,7 @@ class KernelSLIC(ScoreModel):
         self.hyperparameters.update({"low_pass": low_pass})
 
         # Compute effective kernel from central pixel in input (sane default for now)
-        kernel = effective_kernel(forward_model, idim, odim, 0, self.idim[1]//2, self.idim[2]//2) 
+        kernel = effective_kernel(forward_model, self.idim, self.odim, 0, self.idim[1]//2, self.idim[2]//2) 
         self.kernel = torch.as_tensor(kernel).float().to(self.device)
        
         # Add a loww pass filter to the power spectrum to avoid instabilities
