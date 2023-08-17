@@ -61,7 +61,7 @@ def main(args):
     # Get the effective kernel for this forward model
     idim = [1, args.model_pixels, args.model_pixels]
     odim = [1, args.observation_pixels, args.observation_pixels]
-    kernel = effective_kernel(forward_model, idim, odim, 0, args.observation_pixels//2, args.observation_pixels//2) 
+    kernel = effective_kernel(forward_model, idim, odim, 0, args.model_pixels//2, args.model_pixels//2) 
 
     model = KernelSLIC(kernel, idim, forward_model, model=args.model_architecture.lower(), **hyperparameters)
     dataset = Dataset(args.dataset_path, device=DEVICE)

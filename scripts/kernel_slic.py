@@ -94,19 +94,15 @@ class KernelSLIC(ScoreModel):
         return score
     
     def loss_fn(self, samples:Tensor, *args:list[Tensor,...]) -> Tensor:
-        """
-        We rewrite DSM with the appropriate weighting from Girsanov Theorem
-        """
         B, *D = samples.shape
         sde = self.sde
         # Generate noise in tangent space and then correlate it with forward model
         z_input = torch.randn(B, *self.input_dimensions).to(self.device)
-        # vjp func is the transposed forward model operator
-        z, vjp_func = vjp(self.forward_model, z_input)
+        z = self.forward_model(z_input)
         target = self._transition_kernel_score(z)
         t = torch.rand(B).to(self.device) * (sde.T - sde.epsilon) + sde.epsilon
         mean, sigma = sde.marginal_prob(t, samples)
-        u = vjp_func(self.model(t, mean + sigma * z, *args) - target)[0]
+        u = self.model(t, mean + sigma * z, *args) - target
         return torch.sum(u**2) / B
     
     @torch.no_grad()
@@ -189,42 +185,46 @@ if __name__ == "__main__":
     from argparse import ArgumentParser
     parser = ArgumentParser()
 
-    parser.add_argument("--observation_pixels", default=32,    type=int,          help="Has to correspond to the size of the noise images, otherwise the script will break. ")
+    parser.add_argument("--observation_pixels", default=64,    type=int,          help="Has to correspond to the size of the noise images, otherwise the script will break. ")
     parser.add_argument("--observation_pixel_size", default=0.05, type=float,       help="Pixel size for the fake observation, in arcseconds. Should correspond "
                                                                                          "to the pixel size of the noise dataset used (e.g. for HST this should be roughly 0.04 arcseconds.")
-    parser.add_argument("--model_pixels",       default=64,     type=int,         help="Number of pixels on a side for the (prior) model ")
+    parser.add_argument("--model_pixels",       default=128,     type=int,         help="Number of pixels on a side for the (prior) model ")
     parser.add_argument("--model_pixel_size",   default=0.025,  type=float,          help="Size of a pixel for the (prior) model, in arcseconds")
     parser.add_argument("--super_sampling_factor", default=2,   type=int,           help="Factor by which the PSF is super sampled. ")
     parser.add_argument("--zero_padding",       default=0,      type=int,            help="Zero padding in the forward model. Default is no zero-padding")
     args = parser.parse_args()
+    
     import json
     import numpy as np
-    import scipy.stats as st
     from forward_model_old import make_forward_model
+    import matplotlib.pyplot as plt
+    from astropy.io import fits 
 
     with open("psf_deconvolution/ncsnpp_hst_noise.json", "r") as f:
         hp = json.load(f)
+    with fits.open("../data/F814w_WFC3UV_psf.fits") as data:
+        psf = data["PRIMARY"].data.astype(np.float32)[None]
 
-    def gkern(kernlen=21, nsig=10):
-        """Returns a 2D Gaussian kernel."""
-
-        x = np.linspace(-nsig, nsig, kernlen+1)
-        kern1d = np.diff(st.norm.cdf(x))
-        kern2d = np.outer(kern1d, kern1d)
-        return kern2d/kern2d.sum()
-    
-    psf = gkern(args.observation_pixels).reshape(1, args.observation_pixels, args.observation_pixels)
     f = make_forward_model(args, psf)
     idim = [1, args.model_pixels, args.model_pixels]
     odim = [1, args.observation_pixels, args.observation_pixels]
-    kernel = effective_kernel(f, idim, odim, 0, args.observation_pixels//2, args.observation_pixels//2) 
-    model = KernelSLIC(kernel, idim, f, "ncsnpp", sigma_min=1e-2, sigma_max=20, low_pass=1e-1, **hp)
+    kernel = effective_kernel(f, idim, odim, 0, args.model_pixels//2, args.model_pixels//2) 
+
+    plt.imshow(kernel.squeeze())
+    plt.show()
+    model = KernelSLIC(kernel, idim, f, "ncsnpp", sigma_min=1e-2, sigma_max=20, low_pass=1e-2, **hp)
     print(model.low_pass)
     x = torch.randn(5, 1, args.model_pixels, args.model_pixels)
     t = torch.rand(5)
     y = torch.randn(1, 1, args.observation_pixels, args.observation_pixels)
     print(model.slic_score(t, x, y).shape)
     
-    loss = model.loss_fn(f(x)) # loss is computed in cotangent space
+    noise = np.load("../data/hst_cutouts_noclip.npy")[0, :64, :64]
+    print(noise.shape)
+    noise = torch.tensor(noise).float().view(1, 1, 64, 64)
+    loss = model.loss_fn(f(x) + noise)
+    # plt.imshow(loss[0, 0].detach())
+    # plt.colorbar()
+    # plt.show()
     print(loss)
 
