@@ -1,8 +1,10 @@
-from kernel_slic import KernelSLIC, effective_kernel
+from kernel_slic import KernelSLIC
 import json
 import numpy as np
 import torch
-from forward_model_old import make_forward_model
+from astropy.coordinates import SkyCoord
+from astropy import units
+from forward_model import make_forward_model, make_wcs
 from astropy.io import fits
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -56,10 +58,25 @@ def main(args):
         psf = data[args.psf_key].data.astype(np.float32)[None] # add the channel dimension, a single channel for now.
     hyperparameters["psf_file"] = args.psf_fits
     hyperparameters["psf_key"] = args.psf_key
+
+    # Create some fake observation WCS for training
+    coord = SkyCoord(ra=10*units.deg, dec=20*units.deg)
+    observation_pixels = args.observation_pixels
+    model_pixels = args.model_pixels
+    observation_pixel_size = args.observation_pixel_size
+    model_pixel_size = args.model_pixel_size
+    wcs = make_wcs(coord, orientation=0, pixels=observation_pixels, pixel_size=observation_pixel_size * units.arcsec)
+    wcs_list = [wcs]
+    forward_model = make_forward_model(
+            psf, 
+            wcs_list, 
+            super_sampling_factor=args.super_sampling_factor, # super sampling factor of the PSF
+            model_pixels=model_pixels,
+            model_pixel_size=model_pixel_size * units.arcsec
+            )
     
-    forward_model = make_forward_model(args, psf)
-    idim = [1, args.model_pixels, args.model_pixels]
-    odim = [1, args.observation_pixels, args.observation_pixels]
+    idim = [1, model_pixels, model_pixels]
+    odim = [1, observation_pixels, observation_pixels]
 
     model = KernelSLIC(idim, odim, forward_model, model=args.model_architecture.lower(), **hyperparameters)
     print(f"Using beta = {model.low_pass} as regularization")
