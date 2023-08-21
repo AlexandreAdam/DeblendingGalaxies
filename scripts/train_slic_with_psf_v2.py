@@ -79,7 +79,7 @@ def main(args):
     odim = [1, observation_pixels, observation_pixels]
 
     model = KernelSLIC(idim, odim, forward_model, model=args.model_architecture.lower(), **hyperparameters)
-    print(f"Using beta = {model.low_pass} as regularization")
+    print(f"Using beta = {model.low_pass_factor} as regularization")
     dataset = Dataset(args.dataset_path, device=DEVICE)
     preprocessing = lambda img: random_crop(img, args.observation_pixels)
     model.fit(
