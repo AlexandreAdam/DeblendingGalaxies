@@ -125,7 +125,7 @@ def inverse_proprocessing(img, dynamic_range=1e5):
     return 10**(img - np.log10(dynamic_range))
 
 
-def interpolate(image, coordinates, zero_fill=False):
+def interpolate(image, coordinates, zero_fill=True):
     """
     Interpolation function, without a batch size. To make it batched, used vmap from functorch.
     """

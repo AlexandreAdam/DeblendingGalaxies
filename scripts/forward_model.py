@@ -55,8 +55,6 @@ def make_wcs(skycoord, orientation, pixels, pixel_size):
     hdr["CUNIT2"] = 'deg'
     hdr["CTYPE1"] = "RA---TAN"
     hdr["CTYPE2"] = "DEC--TAN"
-    # hdr["CDELT1"] = pixel_size.to(units.deg).value
-    # hdr["CDELT2"] = pixel_size.to(units.deg).value
     hdr["CDELT1"] = 1.
     hdr["CDELT2"] = 1.
     cdelt = pixel_size.to(units.deg).value
@@ -143,7 +141,7 @@ def make_forward_model(
     if fiducial_orientation is None:
         pc = wcs_list[0].pixel_scale_matrix
         fiducial_orientation = np.arctan2(pc[1, 0], pc[0, 0]) * 180 / np.pi
-    fiducial_wcs = make_wcs(fiducial_center, fiducial_orientation, model_pixels, model_pixel_size)
+    fiducial_wcs = make_wcs(fiducial_center, fiducial_orientation, model_pixels + 2*zero_padding, model_pixel_size)
     print(fiducial_wcs)
 
     # Prepare coordinate systems
@@ -163,6 +161,7 @@ def make_forward_model(
         ys = []
         for i in range(len(wcs_list)):
             y = batched_interpolation(x, model_coordinates_list[i])
+            
             y = F.conv2d(y, psf, groups=C, padding="same")
             y = F.avg_pool2d(y, kernel_size=super_sampling_factor, stride=super_sampling_factor)
             ys.append(y)
