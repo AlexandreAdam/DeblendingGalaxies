@@ -31,9 +31,12 @@ class Dataset(torch.utils.data.Dataset):
             return torch.tensor(self.hf[self.key][index, self.channels]).to(self.device)
 
 def main(args):
-    with open(args.model_parameters, "r") as f:
-        hyperparameters = json.load(f)
-    model = ScoreModel(args.model_architecture, **hyperparameters)
+    if args.checkpoints_directory is None:
+        with open(args.model_parameters, "r") as f:
+            hyperparameters = json.load(f)
+        model = ScoreModel(args.model_architecture, **hyperparameters)
+    else:
+        model = ScoreModel(checkpoints_directory=checkpoints_directory)
     dataset = Dataset(args.dataset_path, args.dataset_key, args.dataset_channels, channels_last=args.channels_last, device=DEVICE)
     preprocessing = microjy_preprocessing
     

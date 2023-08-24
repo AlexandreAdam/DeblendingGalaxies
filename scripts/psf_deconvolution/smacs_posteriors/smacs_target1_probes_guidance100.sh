@@ -24,7 +24,7 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --fiducial_dec="-73:27:20.172"\
   --slic_likelihood\
   --slic_model=$DEBLENDER/models/ncsnpp_hst_noise_psf_f814w_wfc3uv_230603210517\
-  --slic_guidance_factor=50\
+  --slic_guidance_factor=0.25\
   --result_dir=$DEBLENDER/results/\
   --prior_model=$DEBLENDER/models/ncsnpp_ct_g_220912024942\
   -N=2000\
