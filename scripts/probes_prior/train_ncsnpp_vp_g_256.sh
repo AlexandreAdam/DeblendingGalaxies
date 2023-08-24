@@ -25,4 +25,5 @@ python $DEBLENDER/scripts/train_score_modelv2.py\
   --checkpoints=10\
   --seed=42\
   --epoch_iterations=1000\
+  --probes_preprocessing
 

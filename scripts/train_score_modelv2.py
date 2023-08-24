@@ -8,6 +8,10 @@ import h5py
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 LOG10 = np.log(10.)
 
+def probes_preprocessing(x):
+    x = torch.clamp(x, 0, 50) # much more leniant preprocessing than before (see definitions)
+    return x
+
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, path_to_h5, key, channels, channels_last=False, device=DEVICE):
@@ -38,7 +42,12 @@ def main(args):
     else:
         model = ScoreModel(checkpoints_directory=checkpoints_directory)
     dataset = Dataset(args.dataset_path, args.dataset_key, args.dataset_channels, channels_last=args.channels_last, device=DEVICE)
-    preprocessing = microjy_preprocessing
+    if probes_preprocessing:
+        preprocessing = probes_preprocessing
+    elif microjy_preprocessing:
+        preprocessing = microjy_preprocessing
+    else:
+        preprocessing = lambda x: x
     
     model.fit(
             dataset, 
@@ -71,6 +80,8 @@ if __name__ == '__main__':
     parser.add_argument("--dataset_channels",   nargs="+", required=True, type=int, help="Channels of the dataset to use. ")
     parser.add_argument("--model_id",           default="none",                     help="The script will search in provided model_dir argument for model_id and load checkpoint if it exists.")
     parser.add_argument("--model_checkpoint",   default=None,       type=int,       help="Index of the checkpoint to load.")
+    parser.add_argument("--probes_preprocessing", action="store_true")
+    parser.add_argument("--microjy_preprocessing", action="store_true")
 
     # Model parameters
     parser.add_argument("--model_parameters",               required=True,                  help="Path to model parameter json file.")
