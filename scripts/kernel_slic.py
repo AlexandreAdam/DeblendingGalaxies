@@ -83,7 +83,7 @@ class KernelSLIC(ScoreModel):
        
         # Compute power spectrum of the Brownian random variable
         power_spectrum = torch.abs(torch.fft.fft2(self.kernel))**2
-        self.forward_factor = power_spectrum[..., 0, 0].squeeze().item()**(1/2)
+        self.forward_factor = power_spectrum[..., 0, 0].squeeze().item()**(1/2) # This breaks when I have multiple observations
         self._transition_kernel_precision = 1 / (power_spectrum + self.forward_factor**2 * low_pass_factor) # Tikhonov regularisation
         
     def slic_score(self, t, x, y, *args):
