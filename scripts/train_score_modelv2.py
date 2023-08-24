@@ -42,9 +42,9 @@ def main(args):
     else:
         model = ScoreModel(checkpoints_directory=checkpoints_directory)
     dataset = Dataset(args.dataset_path, args.dataset_key, args.dataset_channels, channels_last=args.channels_last, device=DEVICE)
-    if probes_preprocessing:
+    if args.probes_preprocessing:
         preprocessing = probes_preprocessing
-    elif microjy_preprocessing:
+    elif args.microjy_preprocessing:
         preprocessing = microjy_preprocessing
     else:
         preprocessing = lambda x: x
