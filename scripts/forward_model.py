@@ -134,23 +134,24 @@ def make_forward_model(
     psf = torch.tensor(psf).float().to(DEVICE).view(C, 1, H, W) # reshape to a convolution kernel [channel_out, channels_in/groups, H, W]
     batched_interpolation = vmap(interpolate, in_dims=(0, None))  # only batch over the images (first argument of interpolate)
     
+    # Create Fiducial WCS for the model
     if fiducial_center is None:
-        # Use same convention as Cutout2D for reference pixel
-        center = [dim / 2 - 0.5 for dim in wcs_list[0].pixel_shape]
+        # Use same convention as Cutout2D for reference pixel (assuming dim is even)
+        center = [dim / 2 - 1  for dim in wcs_list[0].pixel_shape]
         fiducial_center = wcs_list[0].pixel_to_world(*center)
     if fiducial_orientation is None:
         pc = wcs_list[0].pixel_scale_matrix
         fiducial_orientation = np.arctan2(pc[1, 0], pc[0, 0]) * 180 / np.pi
     fiducial_wcs = make_wcs(fiducial_center, fiducial_orientation, model_pixels + 2*zero_padding, model_pixel_size)
+    print("Fiducial WCS")
     print(fiducial_wcs)
-
+    
     # Prepare coordinate systems
     model_coordinates_list = []
     for wcs in wcs_list:
         # Observation pixel coordinates super sampled
-        u = (np.arange(super_sampling_factor * wcs.pixel_shape[0]) + 0.5) / super_sampling_factor 
-        v = (np.arange(super_sampling_factor * wcs.pixel_shape[1]) + 0.5) / super_sampling_factor 
-        # v = np.flip(v) # Remember matrix convention for pixel indexing
+        u = np.arange(super_sampling_factor * wcs.pixel_shape[0]) / super_sampling_factor 
+        v = np.arange(super_sampling_factor * wcs.pixel_shape[1]) / super_sampling_factor 
         u, v = np.meshgrid(u, v, indexing="ij")
         world = wcs.pixel_to_world(u, v)
         model_coordinates = np.stack(fiducial_wcs.world_to_pixel(world), axis=0)
@@ -175,16 +176,16 @@ if __name__ == "__main__":
     import numpy as np
     
     parser = ArgumentParser()
-    parser.add_argument("--obs_pixels",            default=8,     type=int,           help="Number of pixels in the observartion")
+    parser.add_argument("--obs_pixels",            default=16,     type=int,           help="Number of pixels in the observartion")
     parser.add_argument("--obs_pixel_size",        default=0.05,   type=float,         help="Pixel size of the observation")
-    parser.add_argument("--model_pixels",          default=16,     type=int,           help="Number of pixels on a side for the model")
+    parser.add_argument("--model_pixels",          default=32,     type=int,           help="Number of pixels on a side for the model")
     parser.add_argument("--model_pixel_size",      default=0.025,   type=float,         help="Pixel size for the model")
     parser.add_argument("--shift_east",            default=0,      type=float,         help="Pixel shift east")
     parser.add_argument("--shift_north",           default=0,      type=float,         help="Pixel shift north")
     parser.add_argument("--wcs_angle",             default=0,      type=float,         help="Orientation of the observation East of North (deg)")
     parser.add_argument("--model_angle",           default=None,   type=float,         help="Orientation of the model East of North (deg)")
     parser.add_argument("--zero_padding",          default=0,      type=int,           help="Zero padding in the forward model. Default is no zero-padding")
-    parser.add_argument("--super_sampling_factor", default=1,      type=int,           help="Factor by which the PSF is super sampled. ")
+    parser.add_argument("--super_sampling_factor", default=2,      type=int,           help="Factor by which the PSF is super sampled. ")
     args = parser.parse_args()
     """
     Test Rational:

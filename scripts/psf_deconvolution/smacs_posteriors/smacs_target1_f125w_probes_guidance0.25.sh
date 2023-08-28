@@ -6,15 +6,18 @@
 #SBATCH --mem=32G			 # memory per node
 #SBATCH --time=00-05:00		# time (DD-HH:MM)
 #SBATCH --account=rrg-lplevass
-#SBATCH --job-name=Deconvolution_smacs_target0_probes_alpha50
+#SBATCH --job-name=Deconvolution_smacs_target0_F125w_probes
 #SBATCH --output=%x-%j.out
 source $HOME/environments/milex/bin/activate
 python $DEBLENDER/scripts/psf_deconvolution.py\
-  --experiment_name=posterior_smacs_target0_F105W_probes_g_prior_guidance100_N2000\
-  --psf_fits=$DEBLENDER/data/F814w_WFC3UV_cropped_psf.fits\
+  --experiment_name=posterior_smacs_target0_F125W_probes_g_prior_guidance1_N2000\
+  --psf_fits=$DEBLENDER/data/F105w_WFC3IR_psf.fits\
   --psf_key=PRIMARY\
   --real_data\
-  --observation_fits $DEBLENDER/data/smacs_target0_F105W_0.fits smacs_target0_F105W_1.fits smacs_target0_F105W_2.fits smacs_target0_F105W_3.fits \
+  --observation_fits $DEBLENDER/data/smacs_target0_F125W_0.fits \
+  $DEBLENDER/data/smacs_target0_F125W_1.fits \
+  $DEBLENDER/data/smacs_target0_F125W_2.fits \
+  $DEBLENDER/data/smacs_target0_F125W_3.fits \
   --observation_keys SCI\
   --super_sampling_factor=4\
   --model_pixels=256\

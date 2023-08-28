@@ -1,0 +1,26 @@
+#!/bin/bash
+#SBATCH --tasks=1
+#SBATCH --cpus-per-task=1 # maximum cpu per task is 3.5 per gpus
+#SBATCH --gres=gpu:1
+#SBATCH --mem=32G			     # memory per node
+#SBATCH --time=02-23:00		# time (DD-HH:MM)
+#SBATCH --account=rrg-lplevass
+#SBATCH --job-name=Train_SKIRT256_y
+#SBATCH --output=%x-%j.out
+cp $HOME/scratch/skirt256_grizy.h5 $SLURM_TMPDIR/skirt256_grizy.h5
+source $HOME/environments/milex/bin/activate
+python $DEBLENDER/scripts/train_score_modelv2.py\
+  --model_architecture=ncsnpp\
+  --dataset_path=$SLURM_TMPDIR/skirt256_grizy.h5\
+  --dataset_channels 4\
+  --dataset_key=images\
+  --model_parameters=$DEBLENDER/scripts/training_on_256_cutouts/ncsnpp_vp_skirt512_256.json\
+  --epochs=10000\
+  --learning_rate=2e-5\
+  --max_time=70\
+  --batch_size=4\
+  --checkpoints_directory=$DEBLENDER/models/ncsnpp_vp_skirt_y_256_230813225247\
+  --checkpoints=10\
+  --seed=42\
+  --epoch_iterations=1000\
+  --microjy_preprocessing

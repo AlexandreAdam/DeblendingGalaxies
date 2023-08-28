@@ -60,6 +60,30 @@ def create_random_crops(img, crop_height, crop_width, num_crops):
     return crops
 
 
+def align_wcs(wcs, shift_x, shift_y, theta):
+    """
+    This method takes in a WCS and applies a shift and rotation to its coordinates. This is
+    useful when we align the cutouts and fit the shift and orientation so that exposures match
+    when we drizzle. 
+    """
+    hdr = wcs.to_header(True) # True makes it so that we have the SIP coefficients
+
+    pc = wcs.pixel_scale_matrix
+    rotation = np.array([[np.cos(theta), -np.sin(theta)],
+                         [np.sin(theta), np.cos(theta)]])
+    
+    new_pc = rotation @ pc
+    hdr["PC1_1"] = new_pc[0, 0]
+    hdr["PC1_2"] = new_pc[0, 1]
+    hdr["PC2_1"] = new_pc[1, 0]
+    hdr["PC2_2"] = new_pc[1, 1]
+    hdr["CRVAL1"] = hdr["CRVAL1"] + shift_y / 3600 # arcsec to deg
+    hdr["CRVAL2"] = hdr["CRVAL2"] + shift_x / 3600
+    # make a new wcs based on shift and rotation of the model
+    new_wcs = WCS(hdr)
+    return new_wcs
+
+
 def save_cutout(
         output_path: str,
         pixels, 
@@ -67,6 +91,9 @@ def save_cutout(
         coordinate: SkyCoord, 
         drz_path=None, 
         ver=1,
+        shift_x:float=0.,
+        shift_y:float=0.,
+        theta:float=0.,
         flux_smaller_than=0.35, # Used to compute statistics
         verbose=0,
         overwrite=False
@@ -77,7 +104,9 @@ def save_cutout(
     For each flc or flt paths, make a cutout and save the relevant information (SIP distortion, HDRLET etc.) 
     in each fits file to reconstruct the WCS correctly in inference time. 
     
-    Our convention will be to save a cutout per flc. The script will injest each 
+    Our convention will be to save a cutout per flc. The script will injest each cutouts separately.
+
+    I also defined shift_x, shift_y and theta such that an alignement solution can be provided (see notebooks aligning_smacs_targets).
     """
     data = fits.open(flc_or_flt_path)
     hdul = []
@@ -95,8 +124,10 @@ def save_cutout(
         except KeyError as e:
             # For JWST, they changed the key to effective exposure time in i2d fits files
             exptime = data[0].header["EFFEXPTM"]
-    wcs = WCS(header, data)
+    # Important to use the active WCS to get the cutout, then correct cutout wcs with alignment solution
+    wcs = WCS(header, data) 
     cutout = Cutout2D(image, coordinate, pixels, wcs=wcs)
+    aligned_wcs = align_wcs(cutout.wcs, shift_x, shift_y, theta)
 
     if drz_path is not None:
         drz_data = fits.open(drz_path)
@@ -129,10 +160,8 @@ def save_cutout(
         plt.show()
     
     pam = pamutils.pam_from_wcs(cutout.wcs) # pixel area map reads from distortion table coefficients in fits file
-    wcs_hdr = cutout.wcs.to_header()
+    wcs_hdr = aligned_wcs.to_header(True) # True saves the SIP distortions coefficients
     # Make sure to tell WCS we are using SIP distortions, otherwise it complains endlessly
-    wcs_hdr["CTYPE1"] = 'RA---TAN-SIP'
-    wcs_hdr["CTYPE2"] = 'DEC--TAN-SIP'
     header.update(wcs_hdr)
     header["DARKSKY"] = dark_sky_mode
     if verbose:
