@@ -40,7 +40,7 @@ def main(args):
             hyperparameters = json.load(f)
         model = ScoreModel(args.model_architecture, **hyperparameters)
     else:
-        model = ScoreModel(checkpoints_directory=checkpoints_directory)
+        model = ScoreModel(checkpoints_directory=args.checkpoints_directory)
     dataset = Dataset(args.dataset_path, args.dataset_key, args.dataset_channels, channels_last=args.channels_last, device=DEVICE)
     if args.probes_preprocessing:
         preprocessing = probes_preprocessing
