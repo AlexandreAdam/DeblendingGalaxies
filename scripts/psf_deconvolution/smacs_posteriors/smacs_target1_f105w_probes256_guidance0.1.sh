@@ -10,12 +10,11 @@
 #SBATCH --output=%x-%j.out
 source $HOME/environments/milex/bin/activate
 python $DEBLENDER/scripts/psf_deconvolution.py\
-  --experiment_name=posterior_smacs_target0_F105W_probes_z_prior_guidance0.1_N3000\
+  --experiment_name=posterior_smacs_target0_F105W_probes_g_prior_guidance1_N2000\
   --psf_fits=$DEBLENDER/data/F105w_WFC3IR_psf.fits\
   --psf_key=PRIMARY\
   --real_data\
-  --observation_fits \
-  $DEBLENDER/data/smacs_target0_F105WO1_0.fits \
+  --observation_fits $DEBLENDER/data/smacs_target0_F105WO1_0.fits \
   $DEBLENDER/data/smacs_target0_F105WO1_1.fits \
   $DEBLENDER/data/smacs_target0_F105WO1_2.fits \
   $DEBLENDER/data/smacs_target0_F105WO1_3.fits \
@@ -27,10 +26,10 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --fiducial_ra="7:23:24.5462"\
   --fiducial_dec="-73:27:20.172"\
   --slic_likelihood\
-  --slic_model=$DEBLENDER/models/ncsnpp_vp_hst_noise_flat_field_psf_f105w_ssf8_230821133228\
-  --prior_model=$DEBLENDER/models/ncsnpp_ct_g_220912024942\
+  --slic_model=$DEBLENDER/models/ncsnpp_hst_noise_psf_f814w_wfc3uv_230603210517\
   --slic_guidance_factor=0.1\
-  --result_dir=$DEBLENDER/results/ncsnpp_vp_probes_z_256_230824141341\
-  -N=3000\
+  --result_dir=$DEBLENDER/results/\
+  --prior_model=$DEBLENDER/models/ncsnpp_ct_g_220912024942\
+  -N=2000\
   -W=100\
   -B=10\

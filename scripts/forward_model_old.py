@@ -59,6 +59,6 @@ def make_forward_model(args, psf):
         x = F.pad(x, pad=[args.zero_padding]*4, mode="constant", value=0.)
         x = batched_interpolation(x, coordinates)
         x = F.conv2d(x, psf, groups=C, padding="same")
-        x = F.avg_pool2d(x, kernel_size=args.super_sampling_factor, stride=args.super_sampling_factor)
+        x = F.avg_pool2d(x, kernel_size=args.super_sampling_factor, stride=args.super_sampling_factor, divisor_override=1)
         return x
     return A

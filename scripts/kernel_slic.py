@@ -236,6 +236,7 @@ if __name__ == "__main__":
     plt.show()
     model = KernelSLIC(idim, odim, f, "ncsnpp", sigma_min=1e-2, sigma_max=20, low_pass_factor=0.5, **hp)
     print(model.low_pass_factor)
+    print(model.forward_factor)
     x = torch.randn(5, 1, args.model_pixels, args.model_pixels)
     t = torch.rand(5)
     y = torch.randn(1, 1, args.observation_pixels, args.observation_pixels)

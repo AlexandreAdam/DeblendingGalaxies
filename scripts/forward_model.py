@@ -49,8 +49,8 @@ def make_wcs(skycoord, orientation, pixels, pixel_size):
     hdr["NAXIS2"] = pixels
     hdr["CRVAL1"] = skycoord.ra.to(units.deg).value
     hdr["CRVAL2"] = skycoord.dec.to(units.deg).value
-    hdr["CRPIX1"] = pixels/2 - 0.5 # Same convention as Cutout2D
-    hdr["CRPIX2"] = pixels/2 - 0.5
+    hdr["CRPIX1"] = pixels/2 - 1 # Same convention as Cutout2D
+    hdr["CRPIX2"] = pixels/2 - 1 
     hdr["CUNIT1"] = 'deg'
     hdr["CUNIT2"] = 'deg'
     hdr["CTYPE1"] = "RA---TAN"
@@ -69,16 +69,39 @@ def make_wcs(skycoord, orientation, pixels, pixel_size):
     hdr["PC2_1"] = pc[1, 0]
     hdr["PC2_2"] = pc[1, 1]
     return WCS(hdr)
-    
+
+
+def is_power_of_2(n):
+    # if n is a power of 2, then n-1 flips all the bits in its binary rep. Thus, n AND n-1 will be 0 (all the bits will be different)
+    if n <= 0:
+        return False
+    return n & (n - 1) == 0
+
+def noise_padding(x, pad, sigma):
+    B, C, H, W = x.shape
+    PU, PD, PL, PR = pad
+    out = torch.zeros(1, 1, H+PU+PD, W+PL+PR)
+    # Put x in the center of the padded model
+    out[..., PD:H+PU, PL:W+PR] = x
+    # Create a mask for padding region
+    mask = torch.ones_like(out)
+    mask[..., PD:H+PU, PL:W+PR] = 0.
+    # Noise pad around the model
+    z = torch.randn_like(out) * sigma
+    out += z * mask
+    return out
+
 def make_forward_model(
         psf:np.ndarray, 
         wcs_list:list[WCS, ...], 
-        super_sampling_factor:int,
+        psf_super_sampling_factor:int,
+        model_super_sampling_factor:int,
         model_pixels:int,
         model_pixel_size:units.Quantity,
         zero_padding:int=0,
         fiducial_center:SkyCoord=None,
         fiducial_orientation:float=None, # Pick the orientation of the first WCS, angle East of North
+        sum_pool=True,
         **kwargs
         ):
     """
@@ -92,7 +115,10 @@ def make_forward_model(
     wcs_list : list[WCS, ...]
         A list of world coordinate systems (astropy WCS) to be used for the forward model. 
 
-    super_sampling_factor : int
+    psf_super_sampling_factor : int
+        The super sampling factor to be used for the forward model. It determines the level of detail in the model.
+
+    model_super_sampling_factor : int
         The super sampling factor to be used for the forward model. It determines the level of detail in the model.
 
     model_pixels : int
@@ -126,6 +152,7 @@ def make_forward_model(
     >>> model_pixel_size = units.Quantity(0.1, 'arcsec')
     >>> forward_model = make_forward_model(psf, wcs_list, super_sampling_factor, model_pixels, model_pixel_size)
     """
+
     if psf.ndim == 2:
         C = 1
         H, W = psf.shape
@@ -142,29 +169,50 @@ def make_forward_model(
     if fiducial_orientation is None:
         pc = wcs_list[0].pixel_scale_matrix
         fiducial_orientation = np.arctan2(pc[1, 0], pc[0, 0]) * 180 / np.pi
-    fiducial_wcs = make_wcs(fiducial_center, fiducial_orientation, model_pixels + 2*zero_padding, model_pixel_size)
+    ssf = psf_super_sampling_factor
+    fiducial_wcs = make_wcs(fiducial_center, fiducial_orientation, model_pixels, model_pixel_size)
     print("Fiducial WCS")
     print(fiducial_wcs)
     
-    # Prepare coordinate systems
-    model_coordinates_list = []
+
+    model_kernel = model_super_sampling_factor / psf_super_sampling_factor
+    # Prepare Drizzle coordinate systems
+    coordinates_list = []
     for wcs in wcs_list:
-        # Observation pixel coordinates super sampled
-        u = np.arange(super_sampling_factor * wcs.pixel_shape[0]) / super_sampling_factor 
-        v = np.arange(super_sampling_factor * wcs.pixel_shape[1]) / super_sampling_factor 
+        if model_kernel > 1:
+            ssf = model_super_sampling_factor
+            szp = ssf * zero_padding
+        else:
+            ssf = psf_super_sampling_factor
+            szp = ssf * zero_padding
+        u = np.arange(-szp, ssf * wcs.pixel_shape[0] + szp) / ssf
+        v = np.arange(-szp, ssf * wcs.pixel_shape[1] + szp) / ssf
         u, v = np.meshgrid(u, v, indexing="ij")
         world = wcs.pixel_to_world(u, v)
-        model_coordinates = np.stack(fiducial_wcs.world_to_pixel(world), axis=0)
-        model_coordinates_list.append(torch.tensor(model_coordinates).float().to(DEVICE))
+        coordinates = np.stack(fiducial_wcs.world_to_pixel(world), axis=0)
+        coordinates_list.append(torch.tensor(coordinates).float().to(DEVICE))
+
     
     def A(x):
-        x = F.pad(x, pad=[zero_padding]*4, mode="constant", value=0.)
         ys = []
         for i in range(len(wcs_list)):
-            y = batched_interpolation(x, model_coordinates_list[i])
-            
+            # If model is super resolved compared to PSF, drizzle to model coords then pool its pixels
+            if model_kernel > 1:
+                # Drizzle interpolation (handles pixel shift and rotation)
+                y = batched_interpolation(x, coordinates_list[i])
+                # Pooling
+                y = F.avg_pool2d(y, kernel_size=int(model_kernel), divisor_override=1 if sum_pool else None)
+            # Else, interpolate model on the super resolved PSF grid directly
+            else:
+                # Resample model on the psf grid for convolution
+                y = batched_interpolation(x, coordinates_list[i]) * (model_kernel**2 if sum_pool else 1.)
             y = F.conv2d(y, psf, groups=C, padding="same")
-            y = F.avg_pool2d(y, kernel_size=super_sampling_factor, stride=super_sampling_factor)
+            # Pool the convolved flux to observation grid
+            y = F.avg_pool2d(y, kernel_size=psf_super_sampling_factor, divisor_override=1 if sum_pool else None)
+            # Crop out the zero padding to remove edge effects from the convolution
+            pi, pj = wcs_list[i].pixel_shape
+            zp = zero_padding
+            y = y[..., zp:pi+zp, zp:pj+zp]
             ys.append(y)
         return torch.concat(ys, dim=1)
     return A
@@ -179,7 +227,7 @@ if __name__ == "__main__":
     parser.add_argument("--obs_pixels",            default=16,     type=int,           help="Number of pixels in the observartion")
     parser.add_argument("--obs_pixel_size",        default=0.05,   type=float,         help="Pixel size of the observation")
     parser.add_argument("--model_pixels",          default=32,     type=int,           help="Number of pixels on a side for the model")
-    parser.add_argument("--model_pixel_size",      default=0.025,   type=float,         help="Pixel size for the model")
+    parser.add_argument("--model_pixel_size",      default=0.028,   type=float,         help="Pixel size for the model")
     parser.add_argument("--shift_east",            default=0,      type=float,         help="Pixel shift east")
     parser.add_argument("--shift_north",           default=0,      type=float,         help="Pixel shift north")
     parser.add_argument("--wcs_angle",             default=0,      type=float,         help="Orientation of the observation East of North (deg)")
@@ -214,16 +262,17 @@ if __name__ == "__main__":
     
     # Test 1 (im is the model, or signal)
     pix = args.model_pixels
-    # im = torch.ones([pix, pix])
-    im = torch.arange(pix)
-    _, im = torch.meshgrid(im, im)
+    im = torch.ones([pix, pix])
+    print("model sum", im.sum())
+    # im = torch.arange(pix)
+    # _, im = torch.meshgrid(im, im)
     vmax = im.max()
     vmin = 0.
     psf = torch.ones([1, 1, 1])
     
     fig = plt.figure()
     ax = plt.gca()
-    ax.set_title("Model")
+    ax.set_title(f"Model, {im.sum()}")
     ax.imshow(im, vmin=vmin, vmax=vmax, origin="lower")
     
     # reference WCS
@@ -234,15 +283,21 @@ if __name__ == "__main__":
     hdr["NAXIS1"] = w.pixel_shape[0]
     hdr["NAXIS2"] = w.pixel_shape[1]
     # Option 1 (Connor's targets)
-    hdr["CDELT1"] = 1
-    hdr["CDELT2"] = 1
-    PC = np.array([[ 2.95622685e-06,  1.33975477e-05],
-                   [ 1.33618318e-05, -1.72226071e-06]])
+    # hdr["CDELT1"] = 1
+    # hdr["CDELT2"] = 1
+    # PC = np.array([[ 2.95622685e-06,  1.33975477e-05],
+                   # [ 1.33618318e-05, -1.72226071e-06]])
     # Option 2 (SMACS), specify CDELT and leave PC as rotation @ mirror_j
-    # hdr["CDELT1"] = 0.05/3600
-    # hdr["CDELT2"] = 0.05/3600
+#     hdr["CDELT1"] = 0.05/3600
+    # hdr["CDELT2"] = 0.05 w/3600
     # PC = np.array([[ 0.81783584,  0.57545159],
                    # [ 0.57545159, -0.81783584]])
+    # Option 3 (Training WCS)
+    hdr["CDELT1"] = 0.05/3600
+    hdr["CDELT2"] = 0.05/3600
+    PC = np.array([[ 1, 0],
+                   [ 0, -1]])
+
     hdr["PC1_1"] = PC[0, 0]
     hdr["PC1_2"] = PC[0, 1]
     hdr["PC2_1"] = PC[1, 0]
@@ -282,17 +337,19 @@ if __name__ == "__main__":
     A = make_forward_model(
             psf, 
             wcs_list, 
-            super_sampling_factor=args.super_sampling_factor,
+            psf_super_sampling_factor=args.super_sampling_factor,
+            model_super_sampling_factor=args.model_pixels//args.obs_pixels,
             model_pixels=model_pixels,
             model_pixel_size=model_pixel_size,
-            fiducial_orientation=args.model_angle
+            fiducial_orientation=args.model_angle,
+            zero_padding=args.zero_padding
             )
     y_hat = A(im[None, None])
    
     fig = plt.figure()
     ax = plt.gca()
     im = y_hat[0, 0]
-    ax.set_title("Test 1 Fiducial")
+    ax.set_title(f"Test 1 Fiducial, {im.sum()}")
     ax.imshow(im, vmin=vmin, vmax=vmax, origin="lower")
     for (i, j), z in np.ndenumerate(im):
         ax.text(j, i, '{:0.0f}'.format(z), ha='center', va='center') 
@@ -300,7 +357,7 @@ if __name__ == "__main__":
     fig =plt.figure()
     ax = plt.gca()
     im = y_hat[0, 1]
-    ax.set_title("Test 1 Shifted")
+    ax.set_title(f"Test 1 Shifted, {im.sum()}")
     ax.imshow(im, vmin=vmin, vmax=vmax, origin="lower")
     for (i, j), z in np.ndenumerate(im):
         ax.text(j, i, '{:0.0f}'.format(z), ha='center', va='center') 
