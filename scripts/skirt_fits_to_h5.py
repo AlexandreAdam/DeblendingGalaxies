@@ -5,9 +5,10 @@ from astropy.io import fits
 from tqdm import tqdm
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
+from definitions import microjy_preprocessing
 
 
-def pool2d(A, kernel_size, stride, padding=0, pool_mode='max'):
+def pool2d(A, kernel_size, stride, padding=0, pool_mode='sum'):
     '''
      2D Pooling
 
@@ -35,6 +36,8 @@ def pool2d(A, kernel_size, stride, padding=0, pool_mode='max'):
         return A_w.max(axis=(2, 3))
     elif pool_mode == 'avg':
         return A_w.mean(axis=(2, 3))
+    elif pool_model == "sum":
+        return A_w.sum(axis=(2, 3))
 
 
 # TODO redo the dataset with channels_firts and update training scripts
@@ -46,7 +49,8 @@ def main(args):
     with h5py.File(args.output_path, "w") as hf:
         dt = h5py.string_dtype(encoding='utf-8') # allows storing variable length strings
         hf.create_dataset("images", [len(files), len(args.filters), args.size//(2**args.downsample), args.size//(2**args.downsample)], dtype=np.float32)
-        hf["images"].attrs["units"] = 'AB mag/arcsec2'
+        # hf["images"].attrs["units"] = 'AB mag/arcsec2'
+        hf["images"].attrs["units"] = 'micro Jy/arcsec2'
         for i, _filter in enumerate(args.filters):
             hf["images"].attrs[f"channel_{i}"] = _filter
         hf.create_dataset("SIMTAG",  [len(files)],  dtype=dt)
@@ -89,6 +93,8 @@ def main(args):
                 for j, _filter in enumerate(args.filters):
                     image = data[_filter].data
                     image = image[left_crop:total_size - right_crop, left_crop:total_size - right_crop]
+                    # Preprocess data to be in flux/area units in order to avg pool (avg pool to transform flux/area units)
+                    image = microjy_preprocessing(image)
                     if args.downsample > 0:
                         image = pool2d(image, kernel_size=2**args.downsample, stride=2**args.downsample, pool_mode="avg")
                     hf["images"][i, j] = image
@@ -108,8 +114,8 @@ def main(args):
             hf["AZIM"][i] = hdr["AZIM"]
             hf["ROLL"][i] = hdr["ROLL"]
             hf["FOVSIZE"][i] = args.size * hdr["CDELT1"]
-            hf["CDELT1"][i] = hdr["CDELT1"]
-            hf["CDELT2"][i] = hdr["CDELT2"]
+            hf["CDELT1"][i] = hdr["CDELT1"] / 2**args.downsample
+            hf["CDELT2"][i] = hdr["CDELT2"] / 2**args.downsample
             hf["filename"][i] = filename
 
 
