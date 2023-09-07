@@ -8,4 +8,4 @@ python $DEBLENDER/scripts/skirt_fits_to_h5.py\
         --downsample=1\
         --filters SUBARU_HSC.G SUBARU_HSC.R SUBARU_HSC.I SUBARU_HSC.Z SUBARU_HSC.Y\
         --skirt_path=$HOME/scratch/SKIRT_TNG\
-        --output_path=$HOME/scratch/skirt256_grizy.h5
+        --output_path=$HOME/scratch/skirt256_grizy_microjy.h5
