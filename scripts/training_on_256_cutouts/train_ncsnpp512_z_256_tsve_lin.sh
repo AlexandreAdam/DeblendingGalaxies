@@ -7,7 +7,7 @@
 #SBATCH --account=rrg-lplevass
 #SBATCH --job-name=Train_SKIRT256_z
 #SBATCH --output=%x-%j.out
-cp $HOME/scratch/skirt256_grizy.h5 $SLURM_TMPDIR/skirt256_grizy.h5
+cp $HOME/scratch/skirt256_grizy_microjy.h5 $SLURM_TMPDIR/skirt256_grizy.h5
 source $HOME/environments/milex/bin/activate
 python $DEBLENDER/scripts/train_score_modelv2.py\
   --model_architecture=ncsnpp\
@@ -24,4 +24,3 @@ python $DEBLENDER/scripts/train_score_modelv2.py\
   --checkpoints=10\
   --seed=42\
   --epoch_iterations=1000\
-  --microjy_preprocessing

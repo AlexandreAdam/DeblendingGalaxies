@@ -18,8 +18,8 @@
   "dropout": 0,
   "attention": true,
   "sigma_min": 1e-6,
-  "sigma_max": 1e6,
-  "beta": 18,
+  "sigma_max": 1e10,
+  "beta": 30,
   "t_star": 0.4,
   "epsilon": 0,
   "T": 1
