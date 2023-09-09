@@ -26,5 +26,7 @@ python $DEBLENDER/scripts/train_slic_with_psf_v2.py\
   --observation_pixel_size=0.13\
   --model_pixels=32\
   --model_pixel_size=0.13\
-  --zero_padding=0\
-  --super_sampling_factor=4\
+  --zero_padding=8\
+  --noise_padding=16\
+  --psf_super_sampling_factor=4\
+  --model_super_sampling_factor=1\

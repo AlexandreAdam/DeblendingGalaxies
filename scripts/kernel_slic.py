@@ -83,25 +83,20 @@ class KernelSLIC(ScoreModel):
        
         # Compute power spectrum of the Brownian random variable
         power_spectrum = torch.abs(torch.fft.fft2(self.kernel))**2
-        self.forward_factor = power_spectrum[..., 0, 0].squeeze().item()**(1/2) # This breaks when I have multiple observations
-        self._transition_kernel_precision = 1 / (power_spectrum + self.forward_factor**2 * low_pass_factor) # Tikhonov regularisation
+        self._transition_kernel_precision = 1 / (power_spectrum + low_pass_factor) # Tikhonov regularisation
         
     def slic_score(self, t, x, y, *args):
         """
         See Legin et al. (2023), https://iopscience.iop.org/article/10.3847/2041-8213/acd645. 
-        By definition, this is the score in the row space of A, so we divide by the forward factor.
         """
         _, *D = x.shape
         y_hat, vjp_func = vjp(self.forward_model, x)
         sigma = self.sde.sigma(t).view(-1, *[1]*len(D)) 
-        return - vjp_func(self.model(t, y - y_hat, *args))[0] / sigma / self.forward_factor
+        return - vjp_func(self.model(t, y - y_hat, *args))[0] / sigma
     
     def score(self, t, x, *args):
-        """
-        By definition, this is the score in the column space of A, so we multiply by the forward factor.
-        """
         _, *D = x.shape
-        return self.model(t, x, *args) / self.sde.sigma(t).view(-1, *[1]*len(D)) * self.forward_factor
+        return self.model(t, x, *args) / self.sde.sigma(t).view(-1, *[1]*len(D))
     
     def _transition_kernel_score(self, z):
         """
@@ -123,9 +118,9 @@ class KernelSLIC(ScoreModel):
         target = self._transition_kernel_score(z)
         t = torch.rand(B).to(self.device) * (sde.T - sde.epsilon) + sde.epsilon
         mean, sigma = sde.marginal_prob(t, samples)
-        # Redefine target with forward factor
-        u = self.model(t, mean + sigma * z, *args) - target * self.forward_factor
-        return torch.sum(u**2) / B
+        u = self.model(t, mean + sigma * z, *args) - target
+        return u
+        # return torch.sum(u**2) / B
     
     @torch.no_grad()
     def sample(self, batch_size, steps, *args):
@@ -210,10 +205,11 @@ if __name__ == "__main__":
     parser.add_argument("--observation_pixels", default=64,    type=int,          help="Has to correspond to the size of the noise images, otherwise the script will break. ")
     parser.add_argument("--observation_pixel_size", default=0.05, type=float,       help="Pixel size for the fake observation, in arcseconds. Should correspond "
                                                                                          "to the pixel size of the noise dataset used (e.g. for HST this should be roughly 0.04 arcseconds.")
-    parser.add_argument("--model_pixels",       default=128,     type=int,         help="Number of pixels on a side for the (prior) model ")
+    parser.add_argument("--model_pixels",       default=192,     type=int,         help="Number of pixels on a side for the (prior) model ")
     parser.add_argument("--model_pixel_size",   default=0.025,  type=float,          help="Size of a pixel for the (prior) model, in arcseconds")
     parser.add_argument("--super_sampling_factor", default=2,   type=int,           help="Factor by which the PSF is super sampled. ")
-    parser.add_argument("--zero_padding",       default=0,      type=int,            help="Zero padding in the forward model. Default is no zero-padding")
+    parser.add_argument("--zero_padding",       default=8,      type=int,            help="Zero padding in the forward model. Default is no zero-padding")
+
     args = parser.parse_args()
     
     import json
@@ -234,9 +230,8 @@ if __name__ == "__main__":
 
     plt.imshow(kernel.squeeze())
     plt.show()
-    model = KernelSLIC(idim, odim, f, "ncsnpp", sigma_min=1e-2, sigma_max=20, low_pass_factor=0.5, **hp)
+    model = KernelSLIC(idim, odim, f, "ncsnpp", sigma_min=1e-2, sigma_max=20, t_star=0.4, beta=30, low_pass_factor=0.02, **hp)
     print(model.low_pass_factor)
-    print(model.forward_factor)
     x = torch.randn(5, 1, args.model_pixels, args.model_pixels)
     t = torch.rand(5)
     y = torch.randn(1, 1, args.observation_pixels, args.observation_pixels)
@@ -246,8 +241,8 @@ if __name__ == "__main__":
     print(noise.shape)
     noise = torch.tensor(noise).float().view(1, 1, 64, 64)
     loss = model.loss_fn(f(x) + noise)
-    # plt.imshow(loss[0, 0].detach())
-    # plt.colorbar()
-    # plt.show()
-    print(loss)
+    plt.imshow(loss[0, 0].detach())
+    plt.colorbar()
+    plt.show()
+    # print(loss)
 

@@ -63,6 +63,9 @@ def main(args):
     coord = SkyCoord(ra=10*units.deg, dec=20*units.deg)
     observation_pixels = args.observation_pixels
     model_pixels = args.model_pixels
+    zero_padding = args.zero_padding
+    noise_padding = args.noise_padding
+    pixels = model_pixels + 2 * noise_padding
     observation_pixel_size = args.observation_pixel_size
     model_pixel_size = args.model_pixel_size
     wcs = make_wcs(coord, orientation=0, pixels=observation_pixels, pixel_size=observation_pixel_size * units.arcsec)
@@ -70,12 +73,14 @@ def main(args):
     forward_model = make_forward_model(
             psf, 
             wcs_list, 
-            super_sampling_factor=args.super_sampling_factor, # super sampling factor of the PSF
-            model_pixels=model_pixels,
-            model_pixel_size=model_pixel_size * units.arcsec
+            model_super_sampling_factor=args.model_super_sampling_factor,
+            psf_super_sampling_factor=args.psf_super_sampling_factor, # super sampling factor of the PSF
+            model_pixels=pixels,
+            model_pixel_size=model_pixel_size * units.arcsec,
+            zero_padding=zero_padding
             )
     
-    idim = [1, model_pixels, model_pixels]
+    idim = [1, pixels, pixels]
     odim = [1, observation_pixels, observation_pixels]
 
     model = KernelSLIC(idim, odim, forward_model, model=args.model_architecture.lower(), **hyperparameters)
@@ -120,8 +125,11 @@ if __name__ == '__main__':
                                                                                          "to the pixel size of the noise dataset used (e.g. for HST this should be roughly 0.04 arcseconds.")
     parser.add_argument("--model_pixels",       required=True,     type=int,         help="Number of pixels on a side for the (prior) model ")
     parser.add_argument("--model_pixel_size",   required=True,  type=float,          help="Size of a pixel for the (prior) model, in arcseconds")
-    parser.add_argument("--super_sampling_factor", default=2,   type=int,           help="Factor by which the PSF is super sampled. ")
+    parser.add_argument("--psf_super_sampling_factor", default=1,   type=int,           help="Factor by which the PSF is super sampled. ")
+    parser.add_argument("--model_super_sampling_factor", default=1,   type=int,           help="Factor by which the PSF is super sampled. ")
+            
     parser.add_argument("--zero_padding",       default=0,      type=int,            help="Zero padding in the forward model. Default is no zero-padding")
+    parser.add_argument("--noise_padding",       default=0,      type=int,            help="Noise padding in the forward model. Default is no zero-padding")
 
     # Model parameters
     parser.add_argument("--model_parameters",   required=True,                      help="Path to model hyperparameter json file.")
