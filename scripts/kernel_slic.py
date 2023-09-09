@@ -203,10 +203,10 @@ if __name__ == "__main__":
     parser = ArgumentParser()
 
     parser.add_argument("--observation_pixels", default=64,    type=int,          help="Has to correspond to the size of the noise images, otherwise the script will break. ")
-    parser.add_argument("--observation_pixel_size", default=0.05, type=float,       help="Pixel size for the fake observation, in arcseconds. Should correspond "
+    parser.add_argument("--observation_pixel_size", default=0.13, type=float,       help="Pixel size for the fake observation, in arcseconds. Should correspond "
                                                                                          "to the pixel size of the noise dataset used (e.g. for HST this should be roughly 0.04 arcseconds.")
     parser.add_argument("--model_pixels",       default=192,     type=int,         help="Number of pixels on a side for the (prior) model ")
-    parser.add_argument("--model_pixel_size",   default=0.025,  type=float,          help="Size of a pixel for the (prior) model, in arcseconds")
+    parser.add_argument("--model_pixel_size",   default=0.13,  type=float,          help="Size of a pixel for the (prior) model, in arcseconds")
     parser.add_argument("--super_sampling_factor", default=2,   type=int,           help="Factor by which the PSF is super sampled. ")
     parser.add_argument("--zero_padding",       default=8,      type=int,            help="Zero padding in the forward model. Default is no zero-padding")
 

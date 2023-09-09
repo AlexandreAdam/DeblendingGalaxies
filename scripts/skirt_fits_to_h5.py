@@ -104,6 +104,8 @@ def main(args):
                 for j, _filter in enumerate(args.filters):
                     image = data[_filter].data
                     image = np.pad(image, [[left_pad, right_pad]]*2, mode="constant", constant_values=99)
+                    # Preprocess data to be in flux/area units in order to avg pool (avg pool to transform flux/area units)
+                    image = microjy_preprocessing(image)
                     if args.downsample > 0:
                         image = pool2d(image, kernel_size=2**args.downsample, stride=2**args.downsample, pool_mode="avg")
                     hf["images"][i, j] = image
