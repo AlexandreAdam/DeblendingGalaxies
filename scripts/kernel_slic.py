@@ -119,8 +119,7 @@ class KernelSLIC(ScoreModel):
         t = torch.rand(B).to(self.device) * (sde.T - sde.epsilon) + sde.epsilon
         mean, sigma = sde.marginal_prob(t, samples)
         u = self.model(t, mean + sigma * z, *args) - target
-        return u
-        # return torch.sum(u**2) / B
+        return torch.sum(u**2) / B
     
     @torch.no_grad()
     def sample(self, batch_size, steps, *args):
@@ -205,32 +204,58 @@ if __name__ == "__main__":
     parser.add_argument("--observation_pixels", default=64,    type=int,          help="Has to correspond to the size of the noise images, otherwise the script will break. ")
     parser.add_argument("--observation_pixel_size", default=0.13, type=float,       help="Pixel size for the fake observation, in arcseconds. Should correspond "
                                                                                          "to the pixel size of the noise dataset used (e.g. for HST this should be roughly 0.04 arcseconds.")
-    parser.add_argument("--model_pixels",       default=192,     type=int,         help="Number of pixels on a side for the (prior) model ")
+    parser.add_argument("--model_pixels",       default=128,     type=int,         help="Number of pixels on a side for the (prior) model ")
     parser.add_argument("--model_pixel_size",   default=0.13,  type=float,          help="Size of a pixel for the (prior) model, in arcseconds")
-    parser.add_argument("--super_sampling_factor", default=2,   type=int,           help="Factor by which the PSF is super sampled. ")
+    parser.add_argument("--psf_super_sampling_factor", default=4,   type=int,           help="Factor by which the PSF is super sampled. ")
+    parser.add_argument("--model_super_sampling_factor", default=2,   type=int,           help="Factor by which the PSF is super sampled. ")
     parser.add_argument("--zero_padding",       default=8,      type=int,            help="Zero padding in the forward model. Default is no zero-padding")
+    parser.add_argument("--noise_padding",       default=16,      type=int,            help="Zero padding in the forward model. Default is no zero-padding")
 
     args = parser.parse_args()
     
     import json
     import numpy as np
-    from forward_model_old import make_forward_model
+    from forward_model import make_forward_model, make_wcs
     import matplotlib.pyplot as plt
     from astropy.io import fits 
+    import astropy.units as units
+    from astropy.coordinates import SkyCoord
 
     with open("psf_deconvolution/ncsnpp_hst_noise.json", "r") as f:
         hp = json.load(f)
     with fits.open("../data/F814w_WFC3UV_psf.fits") as data:
         psf = data["PRIMARY"].data.astype(np.float32)[None]
 
-    f = make_forward_model(args, psf)
-    idim = [1, args.model_pixels, args.model_pixels]
-    odim = [1, args.observation_pixels, args.observation_pixels]
-    kernel = effective_kernel(f, idim, odim, 0, args.model_pixels//2, args.model_pixels//2) 
+    # Create some fake observation WCS for training
+    coord = SkyCoord(ra=10*units.deg, dec=20*units.deg)
+    observation_pixels = args.observation_pixels
+    model_pixels = args.model_pixels
+    zero_padding = args.zero_padding
+    noise_padding = args.noise_padding
+    pixels = model_pixels + 2 * noise_padding
+    observation_pixel_size = args.observation_pixel_size
+    model_pixel_size = args.model_pixel_size
+    wcs = make_wcs(coord, orientation=0, pixels=observation_pixels, pixel_size=observation_pixel_size * units.arcsec)
+    wcs_list = [wcs]
+    forward_model = make_forward_model(
+            psf, 
+            wcs_list, 
+            model_super_sampling_factor=args.model_super_sampling_factor,
+            psf_super_sampling_factor=args.psf_super_sampling_factor, # super sampling factor of the PSF
+            model_pixels=pixels,
+            model_pixel_size=model_pixel_size * units.arcsec,
+            zero_padding=zero_padding
+            )
+    
+    idim = [1, pixels, pixels]
+    odim = [1, observation_pixels, observation_pixels]
+
+    model = KernelSLIC(idim, odim, forward_model, "ncsnpp", sigma_min=1e-2, sigma_max=20, t_star=0.4, beta=30, low_pass_factor=0.02, **hp)
+    kernel = model.kernel
+    
 
     plt.imshow(kernel.squeeze())
     plt.show()
-    model = KernelSLIC(idim, odim, f, "ncsnpp", sigma_min=1e-2, sigma_max=20, t_star=0.4, beta=30, low_pass_factor=0.02, **hp)
     print(model.low_pass_factor)
     x = torch.randn(5, 1, args.model_pixels, args.model_pixels)
     t = torch.rand(5)
@@ -240,9 +265,9 @@ if __name__ == "__main__":
     noise = np.load("../data/hst_cutouts_noclip.npy")[0, :64, :64]
     print(noise.shape)
     noise = torch.tensor(noise).float().view(1, 1, 64, 64)
-    loss = model.loss_fn(f(x) + noise)
-    plt.imshow(loss[0, 0].detach())
-    plt.colorbar()
-    plt.show()
-    # print(loss)
+    loss = model.loss_fn(forward_model(x) + noise)
+    # plt.imshow(loss[0, 0].detach())
+    # plt.colorbar()
+    # plt.show()
+    print(loss)
 
