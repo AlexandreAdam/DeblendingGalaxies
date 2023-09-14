@@ -16,7 +16,7 @@ python $DEBLENDER/scripts/train_score_modelv2.py\
   --dataset_key=images\
   --model_parameters=$DEBLENDER/scripts/training_on_256_cutouts/ncsnpp_tsve_skirt512_256.json\
   --epochs=10000\
-  --learning_rate=2e-5\
+  --learning_rate=1e-4\
   --max_time=70\
   --batch_size=4\
   --logname_prefix=ncsnpp_tsve_skirt_z_256\

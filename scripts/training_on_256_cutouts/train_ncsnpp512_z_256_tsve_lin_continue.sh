@@ -5,22 +5,21 @@
 #SBATCH --mem=32G			     # memory per node
 #SBATCH --time=02-23:00		# time (DD-HH:MM)
 #SBATCH --account=rrg-lplevass
-#SBATCH --job-name=Train_SKIRT256_i
+#SBATCH --job-name=Train_SKIRT256_z
 #SBATCH --output=%x-%j.out
 cp $HOME/scratch/skirt256_grizy_microjy.h5 $SLURM_TMPDIR/skirt256_grizy.h5
 source $HOME/environments/milex/bin/activate
 python $DEBLENDER/scripts/train_score_modelv2.py\
   --model_architecture=ncsnpp\
   --dataset_path=$SLURM_TMPDIR/skirt256_grizy.h5\
-  --dataset_channels 2\
+  --dataset_channels 3\
   --dataset_key=images\
   --model_parameters=$DEBLENDER/scripts/training_on_256_cutouts/ncsnpp_tsve_skirt512_256.json\
   --epochs=10000\
   --learning_rate=1e-4\
   --max_time=70\
   --batch_size=4\
-  --logname_prefix=ncsnpp_tsve_skirt_i_256\
-  --model_dir=$DEBLENDER/models/\
+  --checkpoints_directory=$DEBLENDER/models/ncsnpp_tsve_skirt_z_256_230910014838\
   --checkpoints=10\
   --seed=42\
   --epoch_iterations=1000\

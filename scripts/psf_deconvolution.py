@@ -54,15 +54,8 @@ def main(args):
     
     # Load model
     prior_model = ScoreModel(checkpoints_directory=args.prior_model)
-    # Hack the VESDE in the model for readability
-    sde = prior_model.sde # .module is a hack to
-    sigma_min = sde.sigma_min
-    sigma_max = sde.sigma_max
-    def sigma(t): # scale of the marginal prob. distiribution
-        return sigma_min * (sigma_max / sigma_min)**t.view(-1, 1, 1, 1)
-    def g(t): # diffusion coefficient of the VESDE
-        return sigma(t) * np.sqrt(2 * (np.log(sigma_max) - np.log(sigma_min)))
-
+    
+    # Load forward model
     with fits.open(args.psf_fits) as data:
         psf = data[args.psf_key].data[None].astype(np.float32) # add the channel dimension, a single channel for now.
 
@@ -104,26 +97,31 @@ def main(args):
 
     elif args.injection_test:
         print("Injection test ...")
-        if len(args.dataset_channels) > 1:
-            raise ValueError("Only single channel for now, until the script is tested for more")
-        if args.dataset_channels_last:
-            print("Using channels last format to read dataset")
-            with h5py.File(args.dataset_path, "r") as hf:
-                reference_profile = torch.tensor(hf[args.dataset_key][args.dataset_id, ..., args.dataset_channels]).to(DEVICE)[None]
-            reference_profile = torch.permute(reference_profile, (0, 3, 1, 2))  # put channels first
-            
+        if args.sample_reference_from_prior:
+            print("Sampling ground truth from prior")
+            reference_profile = prior_model.sample([1, 1, args.model_pixels, args.model_pixels], N=args.em_iterations)
         else:
-            print("Using channels first format to read dataset")
-            with h5py.File(args.dataset_path, "r") as hf:
-                reference_profile = torch.tensor(hf[args.dataset_key][args.dataset_id, args.dataset_channels]).to(DEVICE)[None]
+            print("Getting ground truth from dataset")
+            if len(args.dataset_channels) > 1:
+                raise ValueError("Only single channel for now, until the script is tested for more")
+            if args.dataset_channels_last:
+                print("Using channels last format to read dataset")
+                with h5py.File(args.dataset_path, "r") as hf:
+                    reference_profile = torch.tensor(hf[args.dataset_key][args.dataset_id, ..., args.dataset_channels]).to(DEVICE)[None]
+                reference_profile = torch.permute(reference_profile, (0, 3, 1, 2))  # put channels first
+                
+            else:
+                print("Using channels first format to read dataset")
+                with h5py.File(args.dataset_path, "r") as hf:
+                    reference_profile = torch.tensor(hf[args.dataset_key][args.dataset_id, args.dataset_channels]).to(DEVICE)[None]
          
-        if args.downsample > 0:
-            print(f"Downsampling {args.downsample} times")
-            reference_profile = torch.nn.functional.avg_pool2d(reference_profile, kernel_size=2 * args.downsample, stride=2 * args.downsample)
+            if args.downsample > 0:
+                print(f"Downsampling {args.downsample} times")
+                reference_profile = torch.nn.functional.avg_pool2d(reference_profile, kernel_size=2 * args.downsample, stride=2 * args.downsample)
             
-        if args.probes:
-            print("Preprocessing reference profile with probes g channel")
-            reference_profile = link_function(preprocess_probes_g_channel(reference_profile))
+            if args.probes:
+                print("Preprocessing reference profile with probes g channel")
+                reference_profile = link_function(preprocess_probes_g_channel(reference_profile))
        
         coord = SkyCoord(ra=10*units.deg, dec=20*units.deg)
         wcs = make_wcs(coord, orientation=0, pixels=args.observation_pixels, pixel_size=args.observation_pixel_size * units.arcsec)
@@ -292,6 +290,7 @@ if __name__ == '__main__':
     parser.add_argument("--injection_test",    action="store_true",                 help="Injection test mode will require an hdf5 file for the reference "
                                                                                          "profile to be recovered, the key in the hdf5 and the index of the profile. "
                                                                                          "Also requires a fits file for the PSF")
+    parser.add_argument("--sample_reference_from_prior", action="store_true",       help="Sample ground truth from the prior")
     parser.add_argument("--probes",             action="store_true",                help="Whether to use probes, this is a bit of a hack")
     parser.add_argument("--dataset_path",      default=None,                        help="Path to the h5 files with reference profiles for the injection test")
     parser.add_argument("--dataset_key",       default="images",                    help="Key to the reference profile in the dataset")

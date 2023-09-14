@@ -79,6 +79,8 @@ def align_wcs(wcs, shift_x, shift_y, theta):
     hdr["PC2_2"] = new_pc[1, 1]
     hdr["CRVAL1"] = hdr["CRVAL1"] + shift_y / 3600 # arcsec to deg
     hdr["CRVAL2"] = hdr["CRVAL2"] + shift_x / 3600
+    hdr["CDELT1"] = 1
+    hdr["CDELT2"] = 1
     # make a new wcs based on shift and rotation of the model
     new_wcs = WCS(hdr)
     return new_wcs
