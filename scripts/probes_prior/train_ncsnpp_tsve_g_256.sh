@@ -15,7 +15,7 @@ python $DEBLENDER/scripts/train_score_modelv2.py\
   --channels_last\
   --dataset_channels 0\
   --dataset_key=galaxies\
-  --model_parameters=$DEBLENDER/scripts/training_on_256_cutouts/ncsnpp_tsve_skirt512_256.json\
+  --model_parameters=$DEBLENDER/scripts/probes_prior/ncsnpp_tsve_skirt512_256.json\
   --epochs=10000\
   --learning_rate=2e-5\
   --max_time=70\
