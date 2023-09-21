@@ -12,7 +12,7 @@ source $HOME/environments/milex/bin/activate
 python $DEBLENDER/scripts/train_slic_with_psf_v2.py\
   --model_architecture=ncsnpp\
   --dataset_path=$DEBLENDER/data/smacs_noise_dataset_F105W.npy\
-  --model_parameters=$DEBLENDER/scripts/psf_deconvolution/kernel_slic/ncsnpp_vp_hst_noise.json\
+  --model_parameters=$DEBLENDER/scripts/psf_deconvolution/kernel_slic/ncsnpp_tsve_hst_noise.json\
   --epochs=10000\
   --learning_rate=1e-4\
   --max_time=70\

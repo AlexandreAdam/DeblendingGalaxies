@@ -169,43 +169,28 @@ def make_forward_model(
     if fiducial_orientation is None:
         pc = wcs_list[0].pixel_scale_matrix
         fiducial_orientation = np.arctan2(pc[1, 0], pc[0, 0]) * 180 / np.pi
-    ssf = psf_super_sampling_factor
     fiducial_wcs = make_wcs(fiducial_center, fiducial_orientation, model_pixels, model_pixel_size)
     print("Fiducial WCS")
     print(fiducial_wcs)
     
 
     model_kernel = model_super_sampling_factor / psf_super_sampling_factor
+    ssf = psf_super_sampling_factor
+    szp = ssf * zero_padding
     # Prepare Drizzle coordinate systems
     coordinates_list = []
     for wcs in wcs_list:
-        if model_kernel > 1:
-            ssf = model_super_sampling_factor
-            szp = ssf * zero_padding
-        else:
-            ssf = psf_super_sampling_factor
-            szp = ssf * zero_padding
         u = np.arange(-szp, ssf * wcs.pixel_shape[0] + szp) / ssf
         v = np.arange(-szp, ssf * wcs.pixel_shape[1] + szp) / ssf
         u, v = np.meshgrid(u, v, indexing="ij")
-        world = wcs.pixel_to_world(u, v)
+        world = wcs.pixel_to_world(u, v) / factor
         coordinates = np.stack(fiducial_wcs.world_to_pixel(world), axis=0)
         coordinates_list.append(torch.tensor(coordinates).float().to(DEVICE))
-
     
     def A(x):
         ys = []
         for i in range(len(wcs_list)):
-            # If model is super resolved compared to PSF, drizzle to model coords then pool its pixels
-            if model_kernel > 1:
-                # Drizzle interpolation (handles pixel shift and rotation)
-                y = batched_interpolation(x, coordinates_list[i])
-                # Pooling
-                y = F.avg_pool2d(y, kernel_size=int(model_kernel), divisor_override=1 if sum_pool else None)
-            # Else, interpolate model on the super resolved PSF grid directly
-            else:
-                # Resample model on the psf grid for convolution
-                y = batched_interpolation(x, coordinates_list[i]) * (model_kernel**2 if sum_pool else 1.)
+            y = batched_interpolation(x, coordinates_list[i]) * (model_kernel**2 if sum_pool else 1.)
             y = F.conv2d(y, psf, groups=C, padding="same")
             # Pool the convolved flux to observation grid
             y = F.avg_pool2d(y, kernel_size=psf_super_sampling_factor, divisor_override=1 if sum_pool else None)
