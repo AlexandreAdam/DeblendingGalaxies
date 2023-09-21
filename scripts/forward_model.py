@@ -183,7 +183,7 @@ def make_forward_model(
         u = np.arange(-szp, ssf * wcs.pixel_shape[0] + szp) / ssf
         v = np.arange(-szp, ssf * wcs.pixel_shape[1] + szp) / ssf
         u, v = np.meshgrid(u, v, indexing="ij")
-        world = wcs.pixel_to_world(u, v) / factor
+        world = wcs.pixel_to_world(u, v)
         coordinates = np.stack(fiducial_wcs.world_to_pixel(world), axis=0)
         coordinates_list.append(torch.tensor(coordinates).float().to(DEVICE))
     
