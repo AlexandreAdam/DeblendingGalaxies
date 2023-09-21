@@ -19,9 +19,9 @@
   "attention": false,
   "sigma_min": 1e-6,
   "sigma_max": 1e10,
-  "t_star": 0.4,
+  "t_star": 0.55,
   "beta": 30,
   "T": 1,
   "epsilon": 0,
-  "low_pass_factor": 0.02
+  "low_pass_factor": 0.1
 }
