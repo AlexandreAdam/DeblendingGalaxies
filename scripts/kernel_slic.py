@@ -18,6 +18,7 @@ class KernelSLIC(ScoreModel):
             sde: SDE=None, 
             checkpoints_directory=None, 
             low_pass_factor:float=1.,
+            compute_kernel=False, # Set to true for training
             **hyperparameters
             ):
         """
@@ -76,14 +77,16 @@ class KernelSLIC(ScoreModel):
         
         self.low_pass_factor = low_pass_factor
         self.hyperparameters.update({"low_pass_factor": low_pass_factor})
-
-        # Compute effective kernel from central pixel in input (sane default for now)
-        kernel = effective_kernel(forward_model, self.idim, self.odim, 0, self.idim[1]//2, self.idim[2]//2) 
-        self.kernel = torch.as_tensor(kernel).float().to(self.device)
-       
-        # Compute power spectrum of the Brownian random variable
-        power_spectrum = torch.abs(torch.fft.fft2(self.kernel))**2
-        self._transition_kernel_precision = 1 / (power_spectrum + low_pass_factor) # Tikhonov regularisation
+        
+        if compute_kernel:
+            # Compute effective kernel from central pixel in input (sane default for now)
+            kernel = effective_kernel(forward_model, self.idim, self.odim, 0, self.idim[1]//2, self.idim[2]//2) 
+            self.kernel = torch.as_tensor(kernel).float().to(self.device)
+           
+            # Compute power spectrum of the Brownian random variable
+            power_spectrum = torch.abs(torch.fft.fft2(self.kernel))**2
+            factor = power_spectrum[0, 0]
+            self._transition_kernel_precision = 1 / (power_spectrum + low_pass_factor * factor) # Tikhonov regularisation
         
     def slic_score(self, t, x, y, *args):
         """

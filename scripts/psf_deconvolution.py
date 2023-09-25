@@ -45,6 +45,21 @@ def probes_link_function(x):
 def rad_to_arcsec(theta):
     return theta * 180 / np.pi * 3600
 
+def noise_padding(x, pad, sigma):
+    B, C, H, W = x.shape
+    PU, PD, PL, PR = pad
+    out = torch.zeros(B, C, H+PU+PD, W+PL+PR).to(DEVICE)
+    # Put x in the center of the padded model
+    out[..., PD:H+PU, PL:W+PR] = x
+    # Create a mask for padding region
+    mask = torch.ones_like(out)
+    mask[..., PD:H+PU, PL:W+PR] = 0.
+    # Noise pad around the model
+    z = torch.randn_like(out) * sigma.view(B, 1, 1, 1)
+    out += z * mask
+    return out
+
+
 def main(args):
     if args.seed is not None:
         np.random.seed(args.seed)
@@ -53,7 +68,7 @@ def main(args):
         os.mkdir(args.result_dir)
     
     # Load model
-    prior_model = ScoreModel(checkpoints_directory=args.prior_model)
+    prior = ScoreModel(checkpoints_directory=args.prior_model)
     
     # Load forward model
     with fits.open(args.psf_fits) as data:
@@ -88,18 +103,20 @@ def main(args):
         forward_model = make_forward_model(
                 psf, 
                 wcs_list, 
-                super_sampling_factor=args.super_sampling_factor,
-                model_pixels=args.model_pixels,
+                model_super_sampling_factor=args.model_super_sampling_factor,
+                psf_super_sampling_factor=args.psf_super_sampling_factor,
+                model_pixels=args.model_pixels + 2 * args.noise_padding,
                 model_pixel_size=args.model_pixel_size * units.arcsec,
                 fiducial_center=coord,
-                fiducial_orientation=args.fiducial_orientation
+                fiducial_orientation=args.fiducial_orientation,
+                zero_padding=args.zero_padding
                 )
 
     elif args.injection_test:
         print("Injection test ...")
         if args.sample_reference_from_prior:
             print("Sampling ground truth from prior")
-            reference_profile = prior_model.sample([1, 1, args.model_pixels, args.model_pixels], N=args.em_iterations)
+            reference_profile = prior.sample([1, 1, args.model_pixels, args.model_pixels], N=args.em_iterations)
         else:
             print("Getting ground truth from dataset")
             if len(args.dataset_channels) > 1:
@@ -129,9 +146,11 @@ def main(args):
         forward_model = make_forward_model(
                 psf, 
                 wcs_list, 
-                super_sampling_factor=args.super_sampling_factor,
-                model_pixels=args.model_pixels,
-                model_pixel_size=args.model_pixel_size * units.arcsec
+                psf_super_sampling_factor=args.psf_super_sampling_factor,
+                model_super_sampling_factor=args.model_super_sampling_factor,
+                model_pixels=args.model_pixels + 2*args.noise_padding,
+                model_pixel_size=args.model_pixel_size * units.arcsec,
+                zero_padding=args.zero_padding
                 )
         observation = forward_model(reference_profile)
 
@@ -163,37 +182,50 @@ def main(args):
     
     elif args.slic_likelihood:
         print("Using SLIC likelihood for inference")
-        slic_model = ScoreModel(checkpoints_directory=args.slic_model)
+        slic = ScoreModel(checkpoints_directory=args.slic_model)
+        sde = prior.sde
         def convolved_likelihood_gradient(t, x):
-            B, *_ = x.shape
-            _, O, pix, _ = observation.shape
-            y_hat, vjpfunc = vjp(lambda x: forward_model(link_function(x)), x)
-            # Compute residuals for each observation and concatenate in batch dimension for SLIC
-            residuals = (observation - y_hat).view(B*O, 1, pix, pix)
+            B, *D = x.shape
+            O, Pi, Pj = observations.shape[1:]
+            # make sure t has the same shape as observations
             tiled_t = torch.tile(t, [O])
-            slic_score = slic_model.score(t=tiled_t, x=residuals)
-            # reshape slic score to be isomorph to cotangent space of the forward model
-            slic_score = slic_score.view(B, O, pix, pix) 
-            score = -vjpfunc(slic_score)[0]  # don't forget the minus sign
-            return score
-    
+            mu, _ = sde.marginal_prob_scalars(t)
+            _, sigma = sde.marginal_prob_scalars(tiled_t)
+            mu = mu.view(B, *[1]*len(D))
+
+            # move padding outside of vjp to avoid gradient effects
+            zp = args.noise_padding
+            x_padded = noise_padding(x, [zp, zp, zp, zp], slic.sde.sigma(t))
+            y_hat, vjpfunc = vjp(lambda x: forward_model(x), x_padded)
+
+            residuals = (mu * observations - y_hat).view(B*O, 1, Pi, Pj)
+            score = slic.model(tiled_t, residuals) / sigma.view(-1, 1, 1, 1)
+            score = score.view(B, O, Pi, Pj) # reshape to be isomorph to cotangent space
+
+            # Finally, apply the mask to the score so that these regions are prior driven only.
+            score = -vjpfunc(score)[0]  # don't forget the minus sign
+            m = args.model_pixels
+            return score[..., zp:m+zp, zp:m+zp]
+        
     if args.from_prior:
         print("Prior sampling: ignoring the likelhood completely")
         def score_fn(t, x):
-            prior_score = prior_model.score(t, x)
+            prior_score = prior.score(t, x)
             return prior_score
     else:
         print(f"Posterior sampling with guidance factor {args.slic_guidance_factor}")
         def score_fn(t, x):
-            prior_score = prior_model.score(t, x)
+            prior_score = prior.score(t, x)
             likelihood_score = convolved_likelihood_gradient(t, x)
             return prior_score + args.slic_guidance_factor * likelihood_score
 
-    def euler_maruyama_step(x, t, dt):
-        x_mean = x - g(t) ** 2 * score_fn(t, x) * dt
-        z = torch.randn_like(x)
-        x = x_mean + g(t) * z * np.sqrt(-dt)
+    g = prior.sde.diffusion
+    f = prior.sde.drift
+    def euler_maruyama_step(t, x, y, dt):
         t += dt
+        x_mean = x + (f(t, x) - g(t, x)**2 * score_fn(t, x, y)) * dt
+        z = torch.randn_like(x)
+        x = x_mean + g(t, x) * z * np.sqrt(-dt)
         return x_mean, x, t
     
     if args.corrector is None:
@@ -209,6 +241,8 @@ def main(args):
 
     # Now we do the hard work
     filename = os.path.join(args.result_dir, args.experiment_name + f"_{THIS_WORKER}" + ".h5")
+
+    full_forward_model = lambda x: forward_model(noise_padding(link_function(x), [zp, zp, zp, zp], torch.zeros(args.batch_size).to(DEVICE)))
     print("Solving the posterior...")
     with h5py.File(filename, "w") as hf:
         if args.injection_test:
@@ -231,8 +265,10 @@ def main(args):
                             epsilon = (args.snr * sigma(t))**2
                             # redefine signature of score_fn since corrector doesn't know about t
                             x = corrector(x, epsilon, lambda x: score_fn(t, x))
+                    if t[0].item() < prior.sde.epsilon:
+                        break
             hf["model"][n * args.batch_size: (n+1) * args.batch_size] = link_function(x_mean).cpu().numpy().astype(np.float32)
-            hf["reconstruction"][n * args.batch_size: (n+1) * args.batch_size] = forward_model(link_function(x_mean)).cpu().numpy().astype(np.float32)
+            hf["reconstruction"][n * args.batch_size: (n+1) * args.batch_size] = full_forward_model(link_function(x_mean)).cpu().numpy().astype(np.float32)
 
         # Do the last batch if there is one
         if args.walkers % args.batch_size > 0:
@@ -246,8 +282,10 @@ def main(args):
                             epsilon = (args.snr * sigma(t))**2
                             # redefine signature of score_fn since corrector doesn't know about t
                             x = corrector(x, epsilon, lambda x: score_fn(t, x))
+                    if t[0].item() < prior.sde.epsilon:
+                        break
             hf["model"][(n+1) * args.batch_size:] = link_function(x_mean).cpu().numpy().astype(np.float32)
-            hf["reconstruction"][(n+1) * args.batch_size:] = forward_model(link_function(x_mean)).cpu().numpy().astype(np.float32)
+            hf["reconstruction"][(n+1) * args.batch_size:] = full_forward_model(link_function(x_mean)).cpu().numpy().astype(np.float32)
 
         hf["model"].attrs["total_time"] = time.time() - start_time
         hf["model"].attrs["total_time_unit"] = "seconds"
@@ -273,8 +311,11 @@ if __name__ == '__main__':
     parser.add_argument("--psf_key",            required=True,                      help="Key to the PSF in the fits file")
     
     parser.add_argument("--model_pixels",       default=256,     type=int,          help="Number of pixels on a side for the model")
+    parser.add_argument("--noise_padding",      default=32,     type=int,          help="Noise padding of the model during sampling")
+    parser.add_argument("--zero_padding",       default=8,     type=int,          help="Number of pixels to pad the observation in forward model (avoid edge effects)")
     parser.add_argument("--model_pixel_size",   default=0.0125, type=float,        help="Pixel size for the model")
-    parser.add_argument("--super_sampling_factor", default=4,   type=int,           help="Factor by which the PSF is super sampled. ")
+    parser.add_argument("--psf_super_sampling_factor", default=4,   type=int,           help="Factor by which the PSF is super sampled. ")
+    parser.add_argument("--model_super_sampling_factor", default=4,   type=int,           help="Factor by which the model is super sampled compared to observation")
 
     parser.add_argument("--real_data",          action="store_true",                help="Real data mode. This mode requires a "
                                                                                          "fits file for the observation and a fits file for the PSF. "
@@ -299,7 +340,6 @@ if __name__ == '__main__':
     parser.add_argument("--dataset_channels_last", action="store_true",             help="If provided, then the channels of the dataset are found in the last dimension.")
     parser.add_argument("--observation_pixels", default=128,    type=int,           help="Make a fake observation with this number of pixels on a side")
     parser.add_argument("--observation_pixel_size", default=0.05, type=float,       help="Pixel size for the fake observation, in arcseconds")
-    parser.add_argument("--zero_padding",       default=0,      type=int,           help="Zero padding in the forward model. Default is no zero-padding")
     parser.add_argument("--noise_rms",          default=0.01,   type=float,         help="White noise standard deviation added to the fake observation. If SLIC is provided, "
                                                                                          "a noise realisation from the SLIC model is used instead. ")
     parser.add_argument("--downsample",             default=0,      type=int,           help="An argument used to make sure reference profile size match prior")

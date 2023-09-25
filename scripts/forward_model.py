@@ -101,7 +101,7 @@ def make_forward_model(
         zero_padding:int=0,
         fiducial_center:SkyCoord=None,
         fiducial_orientation:float=None, # Pick the orientation of the first WCS, angle East of North
-        sum_pool=True,
+        sum_pool=False,
         **kwargs
         ):
     """
