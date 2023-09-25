@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --array=1-3
+#SBATCH --array=1-15
 #SBATCH --tasks=1
 #SBATCH --cpus-per-task=1 # maximum cpu per task is 3.5 per gpus
 #SBATCH --gres=gpu:1
 #SBATCH --mem=32G			 # memory per node
-#SBATCH --time=00-05:00		# time (DD-HH:MM)
+#SBATCH --time=00-02:00		# time (DD-HH:MM)
 #SBATCH --account=rrg-lplevass
 #SBATCH --job-name=Deconvolution_cosmos_target1_probes
 #SBATCH --output=%x-%j.out
@@ -27,5 +27,5 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --prior_model=$DEBLENDER/models/ncsnpp_vp_probes_g_256_230824141338\
   --result_dir=$DEBLENDER/results/vp_final_posteriors\
   -N=3000\
-  -W=100\
+  -W=20\
   -B=10\
