@@ -184,7 +184,7 @@ def main(args):
         print("Using SLIC likelihood for inference")
         slic = ScoreModel(checkpoints_directory=args.slic_model)
         sde = prior.sde
-        def convolved_likelihood_gradient(t, x:
+        def convolved_likelihood_gradient(t, x):
             B, *D = x.shape
             O, Pi, Pj = observation.shape[1:]
             # make sure t has the same shape as observations
