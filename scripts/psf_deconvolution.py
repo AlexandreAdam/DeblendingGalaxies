@@ -199,7 +199,7 @@ def main(args):
             y_hat, vjpfunc = vjp(lambda x: forward_model(x), x_padded)
 
             residuals = (mu * observation - y_hat).view(B*O, 1, Pi, Pj)
-            score = slic.model(tiled_t, residuals) / sigma.view(-1, 1, 1, 1)
+            score = slic.score(tiled_t, residuals)
             score = score.view(B, O, Pi, Pj) # reshape to be isomorph to cotangent space
 
             # Finally, apply the mask to the score so that these regions are prior driven only.
@@ -221,7 +221,7 @@ def main(args):
 
     g = prior.sde.diffusion
     f = prior.sde.drift
-    def euler_maruyama_step(t, x, dt):
+    def euler_maruyama_step(x, t, dt):
         t += dt
         x_mean = x + (f(t, x) - g(t, x)**2 * score_fn(t, x)) * dt
         z = torch.randn_like(x)
