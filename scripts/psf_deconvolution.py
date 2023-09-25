@@ -253,7 +253,7 @@ def main(args):
         hf.create_dataset("reconstruction", [args.walkers, *observation.shape[1:]], dtype=np.float32)
         hf["model"].attrs["posterior_sample"] = not args.from_prior
         start_time = time.time()
-        fo n in range(args.walkers // args.batch_size):
+        for n in range(args.walkers // args.batch_size):
             with torch.no_grad():
                 dt = -1. / args.em_iterations
                 t = torch.ones(args.batch_size).to(DEVICE)
