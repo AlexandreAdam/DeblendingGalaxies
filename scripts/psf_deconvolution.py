@@ -241,7 +241,7 @@ def main(args):
 
     # Now we do the hard work
     filename = os.path.join(args.result_dir, args.experiment_name + f"_{THIS_WORKER}" + ".h5")
-
+    zp = args.noise_padding
     full_forward_model = lambda x: forward_model(noise_padding(link_function(x), [zp, zp, zp, zp], torch.zeros(args.batch_size).to(DEVICE)))
     print("Solving the posterior...")
     with h5py.File(filename, "w") as hf:
