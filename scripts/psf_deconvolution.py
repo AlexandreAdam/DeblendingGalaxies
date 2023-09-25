@@ -89,7 +89,7 @@ def main(args):
         for path in args.observation_fits:
             data = fits.open(path)
             exposures = np.stack([data[try_int(k)].data for k in args.observation_keys], axis=0)
-            wcs_list.extent([WCS(data[try_int(k)].header, data) for k in args.observation_keys])
+            wcs_list.extend([WCS(data[try_int(k)].header, data) for k in args.observation_keys])
             observation.append(exposures)
         observation = np.concatenate(observation, axis=0)
         observation = torch.tensor(observation).float().to(DEVICE)[None] # [1, O, pix, pix]
