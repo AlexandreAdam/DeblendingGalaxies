@@ -184,9 +184,9 @@ def main(args):
         print("Using SLIC likelihood for inference")
         slic = ScoreModel(checkpoints_directory=args.slic_model)
         sde = prior.sde
-        def convolved_likelihood_gradient(t, x):
+        def convolved_likelihood_gradient(t, x:
             B, *D = x.shape
-            O, Pi, Pj = observations.shape[1:]
+            O, Pi, Pj = observation.shape[1:]
             # make sure t has the same shape as observations
             tiled_t = torch.tile(t, [O])
             mu, _ = sde.marginal_prob_scalars(t)
@@ -198,7 +198,7 @@ def main(args):
             x_padded = noise_padding(x, [zp, zp, zp, zp], slic.sde.sigma(t))
             y_hat, vjpfunc = vjp(lambda x: forward_model(x), x_padded)
 
-            residuals = (mu * observations - y_hat).view(B*O, 1, Pi, Pj)
+            residuals = (mu * observation - y_hat).view(B*O, 1, Pi, Pj)
             score = slic.model(tiled_t, residuals) / sigma.view(-1, 1, 1, 1)
             score = score.view(B, O, Pi, Pj) # reshape to be isomorph to cotangent space
 
@@ -221,9 +221,9 @@ def main(args):
 
     g = prior.sde.diffusion
     f = prior.sde.drift
-    def euler_maruyama_step(t, x, y, dt):
+    def euler_maruyama_step(t, x, dt):
         t += dt
-        x_mean = x + (f(t, x) - g(t, x)**2 * score_fn(t, x, y)) * dt
+        x_mean = x + (f(t, x) - g(t, x)**2 * score_fn(t, x)) * dt
         z = torch.randn_like(x)
         x = x_mean + g(t, x) * z * np.sqrt(-dt)
         return x_mean, x, t
