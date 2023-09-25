@@ -27,5 +27,5 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --prior_model=$DEBLENDER/models/ncsnpp_vp_skirt_g_256_230813184827\
   --result_dir=$DEBLENDER/results/vp_final_posteriors\
   -N=3000\
-  -W=20\
+  -W=30\
   -B=10\
