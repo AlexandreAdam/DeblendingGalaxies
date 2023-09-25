@@ -257,12 +257,12 @@ def main(args):
             with torch.no_grad():
                 dt = -1. / args.em_iterations
                 t = torch.ones(args.batch_size).to(DEVICE)
-                x = torch.randn(args.batch_size, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(t)
+                x = torch.randn(args.batch_size, 1, args.model_pixels, args.model_pixels).to(DEVICE) * prior.sde.sigma(t).view(-1, 1, 1, 1)
                 for _ in tqdm(range(args.em_iterations)):
                     x_mean, x, t = euler_maruyama_step(x, t, dt)
                     if t[0] > args.corrector_tmin and t[0] > 0 and args.corrector is not None:
                         for _ in range(args.corrector_iterations):
-                            epsilon = (args.snr * sigma(t))**2
+                            epsilon = (args.snr * prior.sde.sigma(t))**2
                             # redefine signature of score_fn since corrector doesn't know about t
                             x = corrector(x, epsilon, lambda x: score_fn(t, x))
                     if t[0].item() < prior.sde.epsilon:
@@ -274,12 +274,12 @@ def main(args):
         if args.walkers % args.batch_size > 0:
             with torch.no_grad():
                 t = torch.ones(args.batch_size).to(DEVICE)
-                x = torch.randn(args.walkers % args.batch_size, 1, args.model_pixels, args.model_pixels).to(DEVICE) * sigma(t)
+                x = torch.randn(args.walkers % args.batch_size, 1, args.model_pixels, args.model_pixels).to(DEVICE) * prior.sde.sigma(t).view(-1, 1, 1, 1)
                 for _ in tqdm(range(args.em_iterations)):
                     x_mean, x, t = euler_maruyama_step(x, t, dt)
                     if t[0] > args.corrector_tmin and t[0] > 0 and args.corrector is not None:
                         for _ in range(args.corrector_iterations):
-                            epsilon = (args.snr * sigma(t))**2
+                            epsilon = (args.snr * prior.sde.sigma(t))**2
                             # redefine signature of score_fn since corrector doesn't know about t
                             x = corrector(x, epsilon, lambda x: score_fn(t, x))
                     if t[0].item() < prior.sde.epsilon:
