@@ -268,7 +268,7 @@ def main(args):
                     if t[0].item() < prior.sde.epsilon:
                         break
             hf["model"][n * args.batch_size: (n+1) * args.batch_size] = link_function(x_mean).cpu().numpy().astype(np.float32)
-            hf["reconstruction"][n * args.batch_size: (n+1) * args.batch_size] = full_forward_model(link_function(x_mean)).cpu().numpy().astype(np.float32)
+            hf["reconstruction"][n * args.batch_size: (n+1) * args.batch_size] = full_forward_model(x_mean).cpu().numpy().astype(np.float32)
 
         # Do the last batch if there is one
         if args.walkers % args.batch_size > 0:
@@ -285,7 +285,7 @@ def main(args):
                     if t[0].item() < prior.sde.epsilon:
                         break
             hf["model"][(n+1) * args.batch_size:] = link_function(x_mean).cpu().numpy().astype(np.float32)
-            hf["reconstruction"][(n+1) * args.batch_size:] = full_forward_model(link_function(x_mean)).cpu().numpy().astype(np.float32)
+            hf["reconstruction"][(n+1) * args.batch_size:] = full_forward_model(x_mean).cpu().numpy().astype(np.float32)
 
         hf["model"].attrs["total_time"] = time.time() - start_time
         hf["model"].attrs["total_time_unit"] = "seconds"
