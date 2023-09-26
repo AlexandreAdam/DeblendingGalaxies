@@ -23,5 +23,5 @@
   "beta": 30,
   "T": 1,
   "epsilon": 0,
-  "low_pass_factor": 0.1
+  "low_pass_factor": 0.5
 }
