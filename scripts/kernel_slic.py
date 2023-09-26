@@ -18,7 +18,6 @@ class KernelSLIC(ScoreModel):
             sde: SDE=None, 
             checkpoints_directory=None, 
             low_pass_factor:float=1.,
-            compute_kernel=True, # Set to true for training
             **hyperparameters
             ):
         """
@@ -78,15 +77,15 @@ class KernelSLIC(ScoreModel):
         self.low_pass_factor = low_pass_factor
         self.hyperparameters.update({"low_pass_factor": low_pass_factor})
         
-        if compute_kernel:
-            # Compute effective kernel from central pixel in input (sane default for now)
-            kernel = effective_kernel(forward_model, self.idim, self.odim, 0, self.idim[1]//2, self.idim[2]//2) 
-            self.kernel = torch.as_tensor(kernel).float().to(self.device)
-           
-            # Compute power spectrum of the Brownian random variable
-            power_spectrum = torch.abs(torch.fft.fft2(self.kernel))**2
-            factor = power_spectrum[0, 0]
-            self._transition_kernel_precision = 1 / (power_spectrum + low_pass_factor * factor) # Tikhonov regularisation
+        # Compute effective kernel from central pixel in input (sane default for now)
+        kernel = effective_kernel(forward_model, self.idim, self.odim, 0, self.idim[1]//2, self.idim[2]//2) 
+        self.kernel = torch.as_tensor(kernel).float().to(self.device)
+       
+        # Compute power spectrum of the Brownian random variable
+        power_spectrum = torch.abs(torch.fft.fft2(self.kernel))**2
+        self.forward_factor = power_spectrum[..., 0, 0].squeeze().item()**(1/2)
+        self._transition_kernel_precision = 1 / (power_spectrum + self.forward_factor**2 * low_pass_factor) # Tikhonov regularisation
+        
         
     def slic_score(self, t, x, y, *args):
         """
@@ -121,7 +120,7 @@ class KernelSLIC(ScoreModel):
         target = self._transition_kernel_score(z)
         t = torch.rand(B).to(self.device) * (sde.T - sde.epsilon) + sde.epsilon
         mean, sigma = sde.marginal_prob(t, samples)
-        u = self.model(t, mean + sigma * z, *args) - target
+        u = self.model(t, mean + sigma * z, *args) - target * self.forward_factor
         return torch.sum(u**2) / B
     
     @torch.no_grad()
@@ -207,10 +206,10 @@ if __name__ == "__main__":
     parser.add_argument("--observation_pixels", default=64,    type=int,          help="Has to correspond to the size of the noise images, otherwise the script will break. ")
     parser.add_argument("--observation_pixel_size", default=0.13, type=float,       help="Pixel size for the fake observation, in arcseconds. Should correspond "
                                                                                          "to the pixel size of the noise dataset used (e.g. for HST this should be roughly 0.04 arcseconds.")
-    parser.add_argument("--model_pixels",       default=128,     type=int,         help="Number of pixels on a side for the (prior) model ")
-    parser.add_argument("--model_pixel_size",   default=0.13,  type=float,          help="Size of a pixel for the (prior) model, in arcseconds")
+    parser.add_argument("--model_pixels",       default=256,     type=int,         help="Number of pixels on a side for the (prior) model ")
+    parser.add_argument("--model_pixel_size",   default=0.13/4,  type=float,          help="Size of a pixel for the (prior) model, in arcseconds")
     parser.add_argument("--psf_super_sampling_factor", default=4,   type=int,           help="Factor by which the PSF is super sampled. ")
-    parser.add_argument("--model_super_sampling_factor", default=2,   type=int,           help="Factor by which the PSF is super sampled. ")
+    parser.add_argument("--model_super_sampling_factor", default=4,   type=int,           help="Factor by which the PSF is super sampled. ")
     parser.add_argument("--zero_padding",       default=8,      type=int,            help="Zero padding in the forward model. Default is no zero-padding")
     parser.add_argument("--noise_padding",       default=16,      type=int,            help="Zero padding in the forward model. Default is no zero-padding")
 
@@ -253,14 +252,14 @@ if __name__ == "__main__":
     idim = [1, pixels, pixels]
     odim = [1, observation_pixels, observation_pixels]
 
-    model = KernelSLIC(idim, odim, forward_model, "ncsnpp", sigma_min=1e-2, sigma_max=20, t_star=0.4, beta=30, low_pass_factor=0.02, **hp)
+    model = KernelSLIC(idim, odim, forward_model, "ncsnpp", sigma_min=1e-2, sigma_max=20, t_star=0.4, beta=30, low_pass_factor=0.1, **hp)
     kernel = model.kernel
     
 
     plt.imshow(kernel.squeeze())
     plt.show()
     print(model.low_pass_factor)
-    x = torch.randn(5, 1, args.model_pixels, args.model_pixels)
+    x = torch.randn(5, 1, args.model_pixels, args.model_pixels) * 1000
     t = torch.rand(5)
     y = torch.randn(1, 1, args.observation_pixels, args.observation_pixels)
     print(model.slic_score(t, x, y).shape)
