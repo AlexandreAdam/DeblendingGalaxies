@@ -18,7 +18,7 @@ class KernelSLIC(ScoreModel):
             sde: SDE=None, 
             checkpoints_directory=None, 
             low_pass_factor:float=1.,
-            compute_kernel=False, # Set to true for training
+            compute_kernel=True, # Set to true for training
             **hyperparameters
             ):
         """
