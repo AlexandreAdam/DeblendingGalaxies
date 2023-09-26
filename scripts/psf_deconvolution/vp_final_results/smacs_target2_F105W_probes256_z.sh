@@ -21,7 +21,7 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   $DEBLENDER/data/smacs_target2_F105WO1_3.fits \
   --observation_keys SCI\
   --psf_super_sampling_factor=4\
-  --model_super_sampling_factor=4\
+  --model_super_sampling_factor=8\
   --model_pixels=256\
   --model_pixel_size=0.01625\
   --fiducial_ra="7:23:20.7483"\
