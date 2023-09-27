@@ -291,16 +291,16 @@ def main(args):
         hf["model"].attrs["total_time_unit"] = "seconds"
         hf["model"].attrs["batch_size"] = args.batch_size
         hf["model"].attrs["euler_maruyama_iteration"] = args.em_iterations
-        hf["model"].attrs["corrector"] = "None" if args.corrector is None else args.corrector
-        hf["model"].attrs["corrector_iterations"] = args.corrector_iterations
-        hf["model"].attrs["corrector_tmin"] = args.corrector_tmin
-        hf["model"].attrs["prior_model"] = os.path.split(args.prior_model)[-1]
-        hf["model"].attrs["slic_model"] = "None" if args.slic_model is None else args.slic_likelihood
-        hf["model"].attrs["gaussian_likelihood"] = args.diagonal_gaussian_likelihood
-        hf["model"].attrs["mass"] = args.mass if args.corrector is not None
-        hf["model"].attrs["snr"] = args.snr
-        hf["model"].attrs["leapfrog_steps"] = args.leapfrog_steps if args.corrector is not None else "None"
-        hf["model"].attrs["slic_guidance_factor"] = args.slic_guidance_factor
+        # hf["model"].attrs["corrector"] = "None" if args.corrector is None else args.corrector
+        # hf["model"].attrs["corrector_iterations"] = args.corrector_iterations
+        # hf["model"].attrs["corrector_tmin"] = args.corrector_tmin
+        # hf["model"].attrs["prior_model"] = os.path.split(args.prior_model)[-1]
+        # hf["model"].attrs["slic_model"] = "None" if args.slic_model is None else args.slic_likelihood
+        # hf["model"].attrs["gaussian_likelihood"] = args.diagonal_gaussian_likelihood
+        # hf["model"].attrs["mass"] = args.mass if args.corrector is not None
+        # hf["model"].attrs["snr"] = args.snr
+        # hf["model"].attrs["leapfrog_steps"] = args.leapfrog_steps if args.corrector is not None else "None"
+        # hf["model"].attrs["slic_guidance_factor"] = args.slic_guidance_factor
 
 
 if __name__ == '__main__':
