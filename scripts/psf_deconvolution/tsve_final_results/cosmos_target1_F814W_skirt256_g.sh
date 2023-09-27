@@ -26,6 +26,6 @@ python $DEBLENDER/scripts/psf_deconvolution.py\
   --slic_model=$DEBLENDER/models/ncsnpp_tsve_hst_noise_flat_field_psf_f814w_ssf4_230926113009\
   --prior_model=$DEBLENDER/models/ncsnpp_tsve_skirt_g_256_230910014855\
   --result_dir=$DEBLENDER/results/tsve_final_posteriors\
-  -N=3000\
-  -W=30\
+  -N=8000\
+  -W=20\
   -B=10\
