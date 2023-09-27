@@ -10,7 +10,7 @@
 #SBATCH --output=%x-%j.out
 source $HOME/environments/milex/bin/activate
 python $DEBLENDER/scripts/psf_deconvolution.py\
-  --experiment_name=cosmos_target2_F814W_probes256_g_N3000\
+  --experiment_name=cosmos_target2_F814W_skirt256_g_N3000\
   --psf_fits=$DEBLENDER/data/F814w_WFC3UV_psf.fits\
   --psf_key=PRIMARY\
   --real_data\
