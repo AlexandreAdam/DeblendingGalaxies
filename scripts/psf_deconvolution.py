@@ -297,9 +297,9 @@ def main(args):
         hf["model"].attrs["prior_model"] = os.path.split(args.prior_model)[-1]
         hf["model"].attrs["slic_model"] = "None" if args.slic_model is None else args.slic_likelihood
         hf["model"].attrs["gaussian_likelihood"] = args.diagonal_gaussian_likelihood
-        hf["model"].attrs["mass"] = args.mass if args.corrector.upper() == "HMC" else "None"
+        hf["model"].attrs["mass"] = args.mass if args.corrector is not None
         hf["model"].attrs["snr"] = args.snr
-        hf["model"].attrs["leapfrog_steps"] = args.leapfrog_steps if args.corrector.upper() == "HCM" else None
+        hf["model"].attrs["leapfrog_steps"] = args.leapfrog_steps if args.corrector is not None else "None"
         hf["model"].attrs["slic_guidance_factor"] = args.slic_guidance_factor
 
 
